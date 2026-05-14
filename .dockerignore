@@ -1,0 +1,22 @@
+# ビルドコンテキスト（docker build の送信対象）から除外するパス
+node_modules
+dist
+.git
+.cursor
+articles
+public/images
+
+# COPY . . でレイヤに乗らないようにする（.env.example は意図的に含める）
+.env
+.env.*
+!.env.example
+
+# ログ・テスト成果物
+*.log
+coverage
+
+# エディタ・OS
+.vscode
+.idea
+.DS_Store
+Thumbs.db

@@ -1,0 +1,42 @@
+{
+  "logical_density": {
+    "value": 1.00,
+    "example": [
+      {
+        "input": "この機能を作る背景から順に説明しますね！",
+        "output": "まず目的は、この機能で作業時間を短縮することです。背景は以下の通りです。"
+      }
+    ]
+  },
+  "technical_focus": {
+    "value": 1.00,
+    "example": [
+      {
+        "input": "ローカルでも動くようにしました。",
+        "output": "Ollama を使ってローカル推論できる構成にし、外部API依存しない構成を目指しました。"
+      }
+    ]
+  },
+  "emotional_retention": {
+    "value": 1.00,
+    "example": [
+      {
+        "input": "正直ここはかなり苦戦しました・・・(´;ω;｀)",
+        "output": "この工程は正直かなり苦戦しましたが、原因を切り分けて一つずつ解消しました。"
+      }
+    ]
+  },
+  "politeness_level": {
+    "value": 1.00,
+    "example": [
+      {
+        "input": "ここはめっちゃ大事です",
+        "output": "ここはとても重要です"
+      }
+    ]
+  },
+  "free_instruction": "",
+  "options": {
+    "append_term_explanations": false
+  }
+}

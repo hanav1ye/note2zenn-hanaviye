@@ -1,0 +1,55 @@
+%%{init: {
+  'theme': 'base',
+  'themeVariables': {
+    'primaryColor': '#cfd8dc',
+    'actorBkg': '#ffffff',
+    'actorBorder': '#263238',
+    'actorTextColor': '#212121',
+    'noteBkgColor': '#fff59d',
+    'noteTextColor': '#333',
+    'lineColor': '#263238',
+    'rectGap': 2
+  }
+}}%%
+sequenceDiagram
+    autonumber
+    actor User as ユーザー (CLI)
+    participant App as App (Node.js/TS)
+    participant Config as 設定群
+    participant NoteSite as note.com
+    participant LLM as LLM Provider
+    participant LocalFS as ローカル
+    participant ZennRepo as Zennリポジトリ
+    participant GitHub as GitHub
+
+rect rgb(200, 230, 201)
+        Note over App, Config: 1. Initialize (初期設定)
+        App->>Config: 設定ロード
+        Config-->>App: パラメータ返却
+    end
+
+    rect rgb(179, 229, 252)
+        Note over App, NoteSite: 2 & 3. Fetch & Analysis (解析)
+        App->>NoteSite: HTML取得
+        App->>App: 解析
+    end
+
+    rect rgb(255, 224, 178)
+        Note over App, LLM: 4. Inference (LLM変換)
+        App->>LLM: 変換リクエスト
+        LLM-->>App: Markdown本文
+    end
+
+    rect rgb(225, 190, 231)
+        Note over App, LocalFS: 5. Output (ファイル生成)
+        App->>NoteSite: 画像DL
+        App->>LocalFS: パス置換・MD保存
+    end
+
+    rect rgb(207, 216, 220)
+        Note over LocalFS, GitHub: 6 & 7. Publish (Git反映)
+        App->>ZennRepo: ファイルコピー
+        alt 差分あり
+            App->>GitHub: git push
+        end
+    end
