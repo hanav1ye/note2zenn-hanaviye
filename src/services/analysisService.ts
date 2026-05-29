@@ -2,7 +2,7 @@ import * as cheerio from "cheerio";
 import type { CheerioAPI } from "cheerio";
 import path from "node:path";
 import { ParsedArticle } from "../types/article.js";
-import { normalizeTag, toSlug } from "../utils/markdown.js";
+import { normalizeTag, resolveAnalysisMarkdownBasename, stripTrailingMarkdownImages, toSlug } from "../utils/markdown.js";
 
 /**
  * Markdownで衝突しやすい記号をエスケープする。
@@ -145,6 +145,102 @@ const isNoteHeaderImage = (figureCaption: string, imgAlt: string): boolean => {
 };
 
 /**
+ * 末尾ブロックが空要素（改行のみ等）かどうかを判定する。
+ */
+const isEmptyTrailingBlock = ($: CheerioAPI, $el: ReturnType<CheerioAPI>): boolean => {
+  const tag = $el.prop("tagName")?.toLowerCase();
+  if (tag === "br" || tag === "hr") {
+    return true;
+  }
+  return $el.text().trim().length === 0;
+};
+
+/**
+ * ブロックが画像のみで構成されているかどうかを判定する。
+ */
+const isImageOnlyBlock = ($: CheerioAPI, $el: ReturnType<CheerioAPI>): boolean => {
+  const tag = $el.prop("tagName")?.toLowerCase();
+  if (tag === "figure") {
+    return $el.find("img").length > 0;
+  }
+  if (tag === "img") {
+    return true;
+  }
+  if (tag === "p" || tag === "div") {
+    if ($el.find("img").length === 0) {
+      return false;
+    }
+    const clone = $el.clone();
+    clone.find("img, br").remove();
+    return clone.text().trim().length === 0;
+  }
+  return false;
+};
+
+/**
+ * 要素から note 元画像の src を取得する。
+ */
+const extractImageSrc = ($: CheerioAPI, $el: ReturnType<CheerioAPI>): string | undefined => {
+  const tag = $el.prop("tagName")?.toLowerCase();
+  if (tag === "img") {
+    return $el.attr("src");
+  }
+  return $el.find("img").first().attr("src");
+};
+
+/**
+ * 記事末尾に連続する figure / img ブロックを DOM と imageMap から除去する。
+ */
+const removeTrailingImagesFromArticle = (
+  $: CheerioAPI,
+  imageMap: Map<string, { fileName: string; altText: string; resolvedUrl: string }>
+): void => {
+  const $root = $("article").length > 0 ? $("article") : $("body");
+  if ($root.length === 0) {
+    return;
+  }
+
+  while (true) {
+    const children = $root.children().toArray();
+    if (children.length === 0) {
+      break;
+    }
+    const $last = $(children[children.length - 1]);
+    if (isEmptyTrailingBlock($, $last)) {
+      $last.remove();
+      continue;
+    }
+    if (isImageOnlyBlock($, $last)) {
+      const src = extractImageSrc($, $last);
+      if (src) {
+        imageMap.delete(src);
+      }
+      $last.remove();
+      continue;
+    }
+    break;
+  }
+};
+
+/**
+ * Markdown 内で参照されている画像だけを残す。
+ */
+const filterImagesReferencedInMarkdown = (
+  imageMap: Map<string, { fileName: string; altText: string; resolvedUrl: string }>,
+  markdown: string,
+  assetDir: string
+): ParsedArticle["images"] => {
+  return Array.from(imageMap.entries())
+    .filter(([, value]) => markdown.includes(`/images/${assetDir}/${value.fileName}`))
+    .map(([originalUrl, value]) => ({
+      originalUrl: value.resolvedUrl,
+      localFileName: value.fileName,
+      localPath: `/images/${assetDir}/${value.fileName}`,
+      altText: value.altText
+    }));
+};
+
+/**
  * インラインコードを Markdown のバックティックで包む。内部にバックティックがある場合はフェンス長を伸ばす。
  * @param raw コード本文
  * @returns Markdown インラインコード
@@ -194,6 +290,30 @@ const resolveLinkHref = (href: string, baseUrl: string): string => {
 };
 
 /**
+ * `<a>` を Markdown リンク文字列へ変換する。
+ * `p` 内はインライン `[label](url)`、`p` 外は Zenn カード構文 `@[card](url)`（上下空行付き）。
+ * @param $ Cheerio API
+ * @param $a 対象のアンカー要素
+ * @param baseUrl note 記事 URL（相対 href 解決用）
+ * @returns 置換用文字列
+ */
+const buildMarkdownLinkReplacement = ($: CheerioAPI, $a: ReturnType<CheerioAPI>, baseUrl: string): string => {
+  const rawHref = $a.attr("href")?.trim() ?? "";
+  const labelRaw = $a.text().trim();
+  if (!rawHref) {
+    return labelRaw;
+  }
+  const resolvedHref = resolveLinkHref(rawHref, baseUrl);
+  const label = labelRaw.length > 0 ? labelRaw : resolvedHref;
+  const safeLabel = label.replace(/\]/g, "\\]");
+  const markdownLink = `[${safeLabel}](${resolvedHref})`;
+  if ($a.closest("p").length > 0) {
+    return markdownLink;
+  }
+  return `\n\n@[card](${resolvedHref})\n\n`;
+};
+
+/**
  * note 記事 DOM の見出しを Zenn 向け ATX Markdown の行へ変換する。
  * `hN` は行頭の `#` を N 個とした見出し行に対応する（例: `h2` → `## タイトル`, `h3` → `### タイトル`）。
  * ネストした見出しを壊さないよう、`h6` から `h1` の順で置換する。
@@ -217,6 +337,7 @@ const convertNoteHeadingsToAtxMarkdown = ($: CheerioAPI): void => {
 /**
  * article 本文HTMLをプレーンテキスト化する。
  * strong / b・リンク・コードを Markdown 風に変換してから抽出する。
+ * リンクは `p` 内ならインライン、`p` 外なら `@[card](url)`（上下空行付き）。
  * `<br>` は CommonMark ハード改行（行末スペース2つ + LF）へ置換する。
  * 見出しは `convertNoteHeadingsToAtxMarkdown` で ATX 行へ確定する。
  * `.text()` はブロック境界の改行を含まないため、主要ブロック末尾に改行を付与してから抽出する（`p` は段落区切り用に `\n\n`、それ以外は `\n`）。
@@ -275,16 +396,7 @@ const articleHtmlToMarkdownish = (fragmentHtml: string, baseUrl: string): string
     }
     linkLeaves.each((_, el) => {
       const $a = $(el);
-      const rawHref = $a.attr("href")?.trim() ?? "";
-      const labelRaw = $a.text().trim();
-      if (!rawHref) {
-        $a.replaceWith(labelRaw);
-        return;
-      }
-      const resolvedHref = resolveLinkHref(rawHref, baseUrl);
-      const label = labelRaw.length > 0 ? labelRaw : resolvedHref;
-      const safeLabel = label.replace(/\]/g, "\\]");
-      $a.replaceWith(`[${safeLabel}](${resolvedHref})`);
+      $a.replaceWith(buildMarkdownLinkReplacement($, $a, baseUrl));
     });
   }
 
@@ -309,13 +421,19 @@ const articleHtmlToMarkdownish = (fragmentHtml: string, baseUrl: string): string
  * note記事HTMLを解析し、本文・タグ・画像情報を抽出する。
  * @param html 解析対象HTML
  * @param baseUrl note記事URL
+ * @param configuredBasename `.env` の `ANALYSIS_MARKDOWN_BASENAME`（未設定可）
  * @returns 解析済み記事データ
  */
-export const analyzeHtml = (html: string, baseUrl: string): ParsedArticle => {
+export const analyzeHtml = (
+  html: string,
+  baseUrl: string,
+  configuredBasename?: string
+): ParsedArticle => {
   const $ = cheerio.load(html);
   const rawTitle: string = $("meta[property='og:title']").attr("content") ?? $("title").text().trim() ?? "untitled";
   const title: string = sanitizeTitle(rawTitle);
   const slug: string = toSlug(title);
+  const assetDir: string = resolveAnalysisMarkdownBasename(configuredBasename, slug);
 
   const imageMap = new Map<string, { fileName: string; altText: string; resolvedUrl: string }>();
   $("figure").each((_, figure) => {
@@ -342,6 +460,8 @@ export const analyzeHtml = (html: string, baseUrl: string): ParsedArticle => {
     const fileName = `${imageMap.size + 1}${ext}`;
     imageMap.set(src, { fileName, altText, resolvedUrl });
   });
+
+  removeTrailingImagesFromArticle($, imageMap);
 
   $("img").each((_, image) => {
     const src = $(image).attr("src");
@@ -370,7 +490,9 @@ export const analyzeHtml = (html: string, baseUrl: string): ParsedArticle => {
     if (!mapped) {
       return;
     }
-    $(image).replaceWith(`![${escapeMarkdown(mapped.altText)}](/images/${slug}/${mapped.fileName})`);
+    $(image).replaceWith(
+      `![${escapeMarkdown(mapped.altText)}](/images/${assetDir}/${mapped.fileName})\n\n`
+    );
   });
 
   $("figure").each((_, figure) => {
@@ -382,20 +504,16 @@ export const analyzeHtml = (html: string, baseUrl: string): ParsedArticle => {
   });
 
   const bodyText = $("article").html() ?? $("body").html() ?? "";
-  const markdown: string = articleHtmlToMarkdownish(bodyText, baseUrl);
+  const markdown: string = stripTrailingMarkdownImages(articleHtmlToMarkdownish(bodyText, baseUrl));
 
   const tags = extractTechnicalTags(markdown);
 
   return {
     title,
     slug,
+    assetDir,
     markdown,
     tags,
-    images: Array.from(imageMap.entries()).map(([originalUrl, value]) => ({
-      originalUrl: value.resolvedUrl,
-      localFileName: value.fileName,
-      localPath: `/images/${slug}/${value.fileName}`,
-      altText: value.altText
-    }))
+    images: filterImagesReferencedInMarkdown(imageMap, markdown, assetDir)
   };
 };

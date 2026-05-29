@@ -1,24 +1,166 @@
 {
   "name": "note2zenn-hanaviye",
+  "displayName": "Note2Zenn",
+  "publisher": "hanaviye",
   "version": "1.0.0",
-  "description": "Convert note articles to Zenn-ready markdown with local LLM support.",
+  "description": "VSCode extension to convert note articles to Zenn markdown via OpenAI.",
   "type": "module",
-  "main": "dist/index.js",
+  "main": "dist/extension.js",
+  "engines": {
+    "vscode": "^1.95.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "keywords": [
+    "note2zenn",
+    "Note2Zenn",
+    "note",
+    "zenn",
+    "markdown"
+  ],
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "note2zenn",
+          "title": "Note2Zenn",
+          "icon": "media/note2zenn.svg"
+        }
+      ]
+    },
+    "views": {
+      "note2zenn": [
+        {
+          "type": "webview",
+          "id": "note2zenn.sidebar",
+          "name": "Note2Zenn"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "note2zenn.focusSidebar",
+        "title": "Open Sidebar",
+        "category": "Note2Zenn"
+      },
+      {
+        "command": "note2zenn.runConversion",
+        "title": "Run Conversion",
+        "category": "Note2Zenn"
+      },
+      {
+        "command": "note2zenn.setOpenAiApiKey",
+        "title": "Set OpenAI API Key",
+        "category": "Note2Zenn"
+      },
+      {
+        "command": "note2zenn.setGithubToken",
+        "title": "Set GitHub Token",
+        "category": "Note2Zenn"
+      },
+      {
+        "command": "note2zenn.setGitAuthorName",
+        "title": "Set Git Author Name",
+        "category": "Note2Zenn"
+      },
+      {
+        "command": "note2zenn.setGitAuthorEmail",
+        "title": "Set Git Author Email",
+        "category": "Note2Zenn"
+      },
+      {
+        "command": "note2zenn.openSettings",
+        "title": "Open Settings",
+        "category": "Note2Zenn"
+      }
+    ],
+    "menus": {
+      "commandPalette": [
+        {
+          "command": "note2zenn.focusSidebar",
+          "when": "true"
+        },
+        {
+          "command": "note2zenn.runConversion",
+          "when": "true"
+        },
+        {
+          "command": "note2zenn.setOpenAiApiKey",
+          "when": "true"
+        },
+        {
+          "command": "note2zenn.setGithubToken",
+          "when": "true"
+        },
+        {
+          "command": "note2zenn.setGitAuthorName",
+          "when": "true"
+        },
+        {
+          "command": "note2zenn.setGitAuthorEmail",
+          "when": "true"
+        },
+        {
+          "command": "note2zenn.openSettings",
+          "when": "true"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "Note2Zenn",
+      "properties": {
+        "note2zenn.zennRepoPath": {
+          "type": "string",
+          "default": "",
+          "description": "Absolute path to your local Zenn repository."
+        },
+        "note2zenn.openAiModel": {
+          "type": "string",
+          "default": "gpt-4.1-mini",
+          "description": "OpenAI model name used for rewriting."
+        },
+        "note2zenn.defaultAnalysisBasename": {
+          "type": "string",
+          "default": "",
+          "description": "Default basename for generated markdown and image directory."
+        },
+        "note2zenn.converterConfig": {
+          "type": "object",
+          "default": {
+            "logical_density": {
+              "value": 0.7
+            },
+            "technical_focus": {
+              "value": 0.7
+            },
+            "emotional_retention": {
+              "value": 0.6
+            },
+            "politeness_level": {
+              "value": 0.5
+            },
+            "free_instruction": ""
+          },
+          "description": "Converter parameters (logical_density, technical_focus, etc.)."
+        }
+      }
+    }
+  },
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "start": "node dist/index.js",
-    "dev": "tsx src/index.ts"
+    "watch": "tsc -p tsconfig.json -w",
+    "smoke": "npm run build && node scripts/smoke-config.mjs"
   },
   "dependencies": {
     "axios": "^1.9.0",
     "cheerio": "^1.0.0",
-    "dotenv": "^16.5.0",
     "openai": "^4.100.0",
     "slugify": "^1.6.6"
   },
   "devDependencies": {
-    "@types/node": "^22.15.17",
-    "tsx": "^4.19.4",
+    "@types/node": "^24.0.0",
+    "@types/vscode": "^1.95.0",
     "typescript": "^5.8.3"
   }
 }

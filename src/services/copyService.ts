@@ -13,27 +13,22 @@ const copyFileSafe = async (src: string, dest: string): Promise<void> => {
 };
 
 /**
- * 生成した記事と画像をZenn管理リポジトリへコピーする。
- * 画像は本文の `/images/<slug>/...` 参照に合わせて `images/` 配下へ配置する。
+ * 本リポジトリ `public/images/<slug>/` の画像を Zenn リポジトリへコピーする。
+ * 記事 Markdown は `writeArticle` で Zenn リポジトリに直接出力済み。
  * @param article 解析済み記事データ
- * @param articlePath 生成済み記事ファイルパス
  * @param projectRoot 本プロジェクトルート
  * @param zennRepoPath Zennリポジトリパス
  */
-export const copyToZennRepo = async (
+export const copyImagesToZennRepo = async (
   article: ParsedArticle,
-  articlePath: string,
   projectRoot: string,
   zennRepoPath: string
 ): Promise<void> => {
-  const destArticle = path.join(zennRepoPath, "articles", `${article.slug}.md`);
-  await copyFileSafe(articlePath, destArticle);
-
-  const sourceImageDir = path.join(projectRoot, "public", "images", article.slug);
+  const sourceImageDir = path.join(projectRoot, "public", "images", article.assetDir);
   const imageFiles = await fs.readdir(sourceImageDir);
   for (const imageFile of imageFiles) {
     const src = path.join(sourceImageDir, imageFile);
-    const dest = path.join(zennRepoPath, "images", article.slug, imageFile);
+    const dest = path.join(zennRepoPath, "images", article.assetDir, imageFile);
     await copyFileSafe(src, dest);
   }
 };

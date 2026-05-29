@@ -41,16 +41,21 @@ export interface ConverterConfig {
  * 実行時に必要な環境設定。
  */
 export interface RuntimeConfig {
-  /** 利用するLLMプロバイダ。 */
-  llmProvider: "ollama" | "openai";
-  /** Ollama APIの接続先URL。 */
-  ollamaUrl: string;
-  /** Ollamaで使用するモデル名。 */
-  ollamaModel: string;
   /** OpenAI APIキー。 */
-  openAiApiKey?: string;
+  openAiApiKey: string;
   /** OpenAIで使用するモデル名。 */
   openAiModel: string;
   /** Zennローカルリポジトリの絶対パス。 */
   zennRepoPath: string;
+  /**
+   * `articles/` の Markdown ファイル名と `images/` 配下フォルダ名のベース（拡張子なし）。
+   * `.env` の `ANALYSIS_MARKDOWN_BASENAME`。未設定時は記事スラッグ。
+   */
+  analysisMarkdownBasename?: string;
+  /** Git commit author name. */
+  gitAuthorName?: string;
+  /** Git commit author email. */
+  gitAuthorEmail?: string;
+  /** GitHub token for push authentication. */
+  githubToken?: string;
 }

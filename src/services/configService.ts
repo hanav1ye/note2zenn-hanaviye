@@ -1,63 +1,91 @@
-import dotenv from "dotenv";
-import fs from "node:fs";
 import { ConverterConfig, RuntimeConfig } from "../types/config.js";
-import { converterConfigPath } from "../utils/paths.js";
-
-/** `.env` を読み込んで環境変数を初期化する。 */
-dotenv.config();
+const DEFAULT_OPENAI_MODEL = "gpt-4.1-mini" as const;
 
 /**
- * 実行時設定を環境変数から読み込み、必須値を検証する。
- * @returns 検証済みの実行時設定
- * @throws {Error} 必須環境変数が不足している場合
+ * 実行時設定を受け取り、必須値を検証する。
+ * VSCode 拡張側で収集した設定値/秘密情報をここで統一的に検証する。
  */
-export const loadRuntimeConfig = (): RuntimeConfig => {
-  const llmProvider: string = process.env.LLM_PROVIDER ?? "ollama";
-  const zennRepoPath: string = process.env.ZENN_REPO_PATH ?? "";
+interface RuntimeConfigInput {
+  zennRepoPath: string;
+  openAiApiKey: string;
+  openAiModel?: string;
+  analysisMarkdownBasename?: string;
+  gitAuthorName?: string;
+  gitAuthorEmail?: string;
+  githubToken?: string;
+}
 
-  if (llmProvider !== "ollama" && llmProvider !== "openai") {
-    throw new Error("LLM_PROVIDER must be either 'ollama' or 'openai'.");
-  }
+/**
+ * 実行時設定を入力値から読み込み、必須値を検証する。
+ * @returns 検証済みの実行時設定
+ * @throws {Error} 必須値が不足している場合
+ */
+export const loadRuntimeConfig = (input: RuntimeConfigInput): RuntimeConfig => {
+  const zennRepoPath: string = input.zennRepoPath.trim();
+  const openAiApiKey: string = input.openAiApiKey.trim();
   if (!zennRepoPath) {
-    throw new Error("ZENN_REPO_PATH is required.");
+    throw new Error("zennRepoPath is required.");
   }
-  if (llmProvider === "openai" && !process.env.OPENAI_API_KEY) {
-    throw new Error("OPENAI_API_KEY is required when LLM_PROVIDER=openai.");
+  if (!openAiApiKey) {
+    throw new Error("OpenAI API key is required.");
   }
+  const analysisMarkdownBasename = input.analysisMarkdownBasename?.trim();
 
   return {
-    llmProvider,
-    ollamaUrl: process.env.OLLAMA_URL ?? "http://localhost:11434",
-    ollamaModel: process.env.OLLAMA_MODEL ?? "gemma4:E2B",
-    openAiApiKey: process.env.OPENAI_API_KEY,
-    openAiModel: process.env.OPENAI_MODEL ?? "gpt-4o-mini",
-    zennRepoPath
+    openAiApiKey,
+    openAiModel: input.openAiModel?.trim() || DEFAULT_OPENAI_MODEL,
+    zennRepoPath,
+    ...(input.gitAuthorName?.trim() ? { gitAuthorName: input.gitAuthorName.trim() } : {}),
+    ...(input.gitAuthorEmail?.trim() ? { gitAuthorEmail: input.gitAuthorEmail.trim() } : {}),
+    ...(input.githubToken?.trim() ? { githubToken: input.githubToken.trim() } : {}),
+    ...(analysisMarkdownBasename ? { analysisMarkdownBasename } : {})
   };
 };
 
 /**
- * 変換パラメータのデフォルト設定を返す。
+ * 変換パラメータのデフォルト設定。
+ */
+const defaultConverterConfig: ConverterConfig = {
+  logical_density: { value: 0.7 },
+  technical_focus: { value: 0.7 },
+  emotional_retention: { value: 0.6 },
+  politeness_level: { value: 0.5 },
+  free_instruction: ""
+};
+
+/**
+ * 設定値を 0.0-1.0 の範囲に丸める。
+ */
+const clamp01 = (value: number): number => {
+  if (!Number.isFinite(value)) {
+    return 0;
+  }
+  return Math.min(1, Math.max(0, value));
+};
+
+/**
+ * 変換パラメータ設定オブジェクトを検証/正規化して返す。
+ * 拡張設定で一部キーが欠けてもデフォルト値で補完する。
  * @returns 変換設定
  */
-export const loadConverterConfig = (): ConverterConfig => {
-  const defaultConfig: ConverterConfig = {
-    logical_density: { value: 0.7 },
-    technical_focus: { value: 0.7 },
-    emotional_retention: { value: 0.6 },
-    politeness_level: { value: 0.5 },
-    free_instruction: ""
+export const loadConverterConfig = (rawConfig: unknown): ConverterConfig => {
+  if (!rawConfig || typeof rawConfig !== "object") {
+    return defaultConverterConfig;
+  }
+  const parsed = rawConfig as Partial<ConverterConfig>;
+  const normalize = (value: unknown, fallback: number): { value: number } => {
+    if (!value || typeof value !== "object") {
+      return { value: fallback };
+    }
+    const candidate = value as { value?: unknown };
+    return { value: clamp01(typeof candidate.value === "number" ? candidate.value : fallback) };
   };
-
-  if (!fs.existsSync(converterConfigPath)) {
-    return defaultConfig;
-  }
-
-  try {
-    const rawJson: string = fs.readFileSync(converterConfigPath, "utf-8");
-    const parsedJson: unknown = JSON.parse(rawJson);
-    return parsedJson as ConverterConfig;
-  } catch (error: unknown) {
-    const message: string = error instanceof Error ? error.message : "Unknown JSON parse error";
-    throw new Error(`converter-config.json is invalid: ${message}`);
-  }
+  return {
+    logical_density: normalize(parsed.logical_density, defaultConverterConfig.logical_density.value),
+    technical_focus: normalize(parsed.technical_focus, defaultConverterConfig.technical_focus.value),
+    emotional_retention: normalize(parsed.emotional_retention, defaultConverterConfig.emotional_retention.value),
+    politeness_level: normalize(parsed.politeness_level, defaultConverterConfig.politeness_level.value),
+    free_instruction: typeof parsed.free_instruction === "string" ? parsed.free_instruction : "",
+    ...(parsed.options && typeof parsed.options === "object" ? { options: parsed.options } : {})
+  };
 };

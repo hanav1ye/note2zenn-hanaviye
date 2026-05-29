@@ -6,9 +6,6 @@ import { promptPath } from "../utils/paths.js";
 /** リライト推論のサンプリング温度。変換再現性のため0に固定する。 */
 const INFERENCE_TEMPERATURE = 0 as const;
 
-/** Ollama の生成上限トークン数（num_predict）。 */
-const OLLAMA_NUM_PREDICT = 4096 as const;
-
 /**
  * `converter_config` のキー意味をユーザープロンプトに載せる用。
  * `ConverterConfig`（`src/types/config.ts`）の JSDoc と整合させる。
@@ -35,7 +32,7 @@ const CONVERTER_VALUE_APPLICATION_LINES: readonly string[] = [
 /**
  * 記事本文のリライトを行うLLMクライアントの抽象インターフェース。
  */
-interface LlmClient {
+export interface LlmClient {
   /**
    * 設定に基づいてMarkdown本文をリライトする。
    * @param inputMarkdown 元本文
@@ -44,57 +41,6 @@ interface LlmClient {
    * @returns 変換後本文
    */
   rewrite(inputMarkdown: string, converterConfig: ConverterConfig, slug: string): Promise<string>;
-}
-
-/**
- * Ollamaを利用するLLMクライアント実装。
- */
-class OllamaClient implements LlmClient {
-  /**
-   * @param runtimeConfig 実行時設定
-   * @param systemPrompt システムプロンプト
-   */
-  public constructor(private readonly runtimeConfig: RuntimeConfig, private readonly systemPrompt: string) {}
-
-  /**
-   * Ollama APIを呼び出して本文をリライトする。
-   * @param inputMarkdown 元本文
-   * @param converterConfig 変換設定
-   * @param slug 記事スラッグ
-   * @returns 変換後本文
-   * @throws {Error} APIレスポンスが不正な場合
-   */
-  public async rewrite(inputMarkdown: string, converterConfig: ConverterConfig, slug: string): Promise<string> {
-    const body = {
-      model: this.runtimeConfig.ollamaModel,
-      stream: false,
-      options: {
-        temperature: INFERENCE_TEMPERATURE,
-        num_predict: OLLAMA_NUM_PREDICT
-      },
-      messages: [
-        { role: "system", content: this.systemPrompt },
-        {
-          role: "user",
-          content: buildUserPrompt(inputMarkdown, converterConfig, slug)
-        }
-      ]
-    };
-    const response = await fetch(`${this.runtimeConfig.ollamaUrl}/api/chat`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body)
-    });
-    if (!response.ok) {
-      throw new Error(`Ollama API request failed: ${response.status} ${response.statusText}`);
-    }
-    const data = (await response.json()) as { message?: { content?: string } };
-    const content = data.message?.content?.trim();
-    if (!content) {
-      throw new Error("Ollama returned empty response.");
-    }
-    return content;
-  }
 }
 
 /**
@@ -191,8 +137,5 @@ const buildUserPrompt = (markdown: string, converterConfig: ConverterConfig, slu
  */
 export const createLlmClient = async (runtimeConfig: RuntimeConfig): Promise<LlmClient> => {
   const systemPrompt = await fs.readFile(promptPath, "utf-8");
-  if (runtimeConfig.llmProvider === "ollama") {
-    return new OllamaClient(runtimeConfig, systemPrompt);
-  }
   return new OpenAiClient(runtimeConfig, systemPrompt);
 };

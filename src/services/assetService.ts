@@ -5,11 +5,21 @@ import { ParsedArticle } from "../types/article.js";
 import { publicImagesDir } from "../utils/paths.js";
 
 /**
- * 記事内の画像をローカルへダウンロードする。
+ * 記事内の画像を指定ベースディレクトリ配下へダウンロードする。
  * @param article 解析済み記事データ
+ * @param imagesBaseDir 画像保存の親ディレクトリ
+ * @param imageSubDir 親直下のサブディレクトリ名（省略時は `article.assetDir`）
  */
-export const downloadImages = async (article: ParsedArticle): Promise<void> => {
-  const targetDir = path.join(publicImagesDir, article.slug);
+export const downloadImages = async (
+  article: ParsedArticle,
+  imagesBaseDir: string = publicImagesDir,
+  imageSubDir: string = article.assetDir
+): Promise<void> => {
+  if (article.images.length === 0) {
+    return;
+  }
+
+  const targetDir = path.join(imagesBaseDir, imageSubDir);
   await fs.mkdir(targetDir, { recursive: true });
 
   for (const image of article.images) {

@@ -1,7 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { ParsedArticle } from "../types/article.js";
-import { articlesDir } from "../utils/paths.js";
+import { stripTrailingMarkdownImages } from "../utils/markdown.js";
 
 /**
  * Zenn向けフロントマターを生成する。
@@ -119,18 +119,27 @@ const normalizeMessageBlocks = (markdown: string): string => {
 };
 
 /**
- * Markdown記事をファイルとして出力する。
+ * リライト済み記事を Zenn リポジトリの `articles/` へ直接出力する（本リポジトリには書かない）。
  * @param article 解析済み記事データ
  * @param rewrittenMarkdown リライト済み本文
+ * @param zennRepoPath Zenn リポジトリのルートパス
+ * @param articleFileBasename 記事ファイル名のベース（拡張子なし）
  * @returns 生成した記事ファイルパス
  */
-export const writeArticle = async (article: ParsedArticle, rewrittenMarkdown: string): Promise<string> => {
+export const writeArticle = async (
+  article: ParsedArticle,
+  rewrittenMarkdown: string,
+  zennRepoPath: string,
+  articleFileBasename: string
+): Promise<string> => {
+  const articlesDir = path.join(zennRepoPath, "articles");
   await fs.mkdir(articlesDir, { recursive: true });
-  const filePath = path.join(articlesDir, `${article.slug}.md`);
+  const filePath = path.join(articlesDir, `${articleFileBasename}.md`);
   const frontMatter = buildFrontMatter(article.title, article.tags);
   const sanitizedBody = stripTitleFromBody(rewrittenMarkdown, article.title);
   const bodyWithoutTagCollection = stripTrailingTagCollection(sanitizedBody);
-  const normalizedBody = normalizeMessageBlocks(bodyWithoutTagCollection);
+  const bodyWithoutTrailingImages = stripTrailingMarkdownImages(bodyWithoutTagCollection);
+  const normalizedBody = normalizeMessageBlocks(bodyWithoutTrailingImages);
   await fs.writeFile(filePath, `${frontMatter}${normalizedBody}\n`, "utf-8");
   return filePath;
 };
