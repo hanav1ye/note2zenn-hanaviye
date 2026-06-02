@@ -115,7 +115,9 @@ flowchart TB
 ### `configService.ts`
 
 - `loadRuntimeConfig`: `zennRepoPath`, `openAiApiKey` 必須
-- `loadConverterConfig`: 欠損キーをデフォルト補完、`value` を 0〜1 に clamp
+- `loadConverterConfig`: 欠損キーをデフォルト補完、`value` を 0〜1 に clamp。`rawConfig` がオブジェクトでない場合は全体デフォルト。**`example` は正規化時に落ちる**（各軸は `{ value }` のみ）
+
+サイドバー側: `converterConfig` の JSON 構文チェックは Webview の「設定を保存」時のみ（`JSON.parse`）。変換は `readSettings()` の保存済み値を使用。
 
 ## 5. 型定義
 

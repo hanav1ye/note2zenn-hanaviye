@@ -97,19 +97,33 @@ note で公開した記事を、Zenn に投稿しやすい形式（Markdown + �
 
 ※ `analysisService` 単体では、basename 未指定時に note の slug へフォールバックする実装がありますが、サイドバー・コマンドパレットからの実行では上記 1〜3 が適用されます。
 
-### 4.3 推論（Inference）
+### 4.3 converterConfig（サイドバー経由の設定）
+
+| タイミング | 挙動 |
+|------------|------|
+| サイドバー「設定を保存」 | `JSON.parse` のみ。構文エラーなら保存しない |
+| 変換実行 | 保存済み設定を `loadConverterConfig` で正規化（欠損・型違いはデフォルト補完、`value` を 0〜1 に clamp）。構文チェックはしない |
+| 未保存のテキストエリア | 変換では参照しない |
+
+- 保存時点では **スキーマ検証なし**（意味的におかしい JSON も保存可）
+- 変換時は **エラーにせず補正して続行**
+- `example`（Few-shot）は現状、正規化時に落ちる（`value` のみ LLM に渡る）
+
+利用者向けの詳細は [SETUP_AND_WORKFLOW.md §3.3](SETUP_AND_WORKFLOW.md#33-converterconfigjson)。
+
+### 4.4 推論（Inference）
 
 - OpenAI API のみ。モデルは `note2zenn.openAiModel`（未設定時 `gpt-4.1-mini`）
 - `temperature: 0`
 - プロンプト: `prompts/system_prompt.txt` + user 側に `converter_config` と記事本文
 
-### 4.4 出力（Output）
+### 4.5 出力（Output）
 
 - フロントマター: `published: false` 固定（Zenn 上は下書き）
 - `type: tech`, `emoji: 📝`（固定値）
 - 本文は LLM 出力を後処理（タイトル重複除去、note 末尾タグ除去など）
 
-### 4.5 Git（Publish）
+### 4.6 Git（Publish）
 
 - 対象: `articles/<assetDir>.md`, `images/<assetDir>/`
 - commit メッセージ: `add <assetDir>`
@@ -119,7 +133,7 @@ note で公開した記事を、Zenn に投稿しやすい形式（Markdown + �
 
 **push は自動実行される。** 利用者が事前に diff を確認する運用を前提とする（免責参照）。
 
-### 4.6 進捗・エラー
+### 4.7 進捗・エラー
 
 - 各ステップの `[START]` / `[END]` を Output チャンネル `Note2Zenn` に出力
 - 失敗時はエラー通知 + Output にメッセージ
