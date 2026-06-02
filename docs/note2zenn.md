@@ -49,7 +49,8 @@ note で公開した記事を、Zenn に投稿しやすい形式（Markdown + �
     ↓ note URL, basename, 設定
 [VSCode 拡張]
   extension.ts / sidebarViewProvider.ts
-  note2zennController.ts
+  conversion/runConversion.ts
+  settings/ / validation/ / output/
     ↓
   pipeline.ts
     ↓
@@ -60,7 +61,7 @@ note で公開した記事を、Zenn に投稿しやすい形式（Markdown + �
 
 1. **Initialize** — 設定・Secret・basename を検証し LLM クライアントを準備
 2. **Fetch** — note 記事 HTML を HTTP GET
-3. **Analysis** — タイトル・本文 Markdown・画像・タグを抽出
+3. **Analysis** — タイトル・本文 Markdown・画像を抽出
 4. **Inference** — `system_prompt.txt` + `converterConfig` で OpenAI リライト
 5. **Download / Output** — 画像保存、`articles/<assetDir>.md` 生成
 6. **Copy** — 画像を Zenn リポ `images/<assetDir>/` へコピー
@@ -87,13 +88,13 @@ note で公開した記事を、Zenn に投稿しやすい形式（Markdown + �
 - アイキャッチ・末尾プロフィール画像を本文・DL 対象から除外
 - 画像パスを `/images/{assetDir}/filename` に変換
 - `figcaption` を alt に反映
-- 技術タグを本文からヒューリスティック抽出（最大 5）
+- タグは Inference（OpenAI）で生成（Analysis では作らない）
 
 `assetDir` の決定（通常の UI 経由）:
 
 1. サイドバー入力の basename（空なら次へ）
 2. 設定 `defaultAnalysisBasename`
-3. どちらも無い場合は **エラー**（変換開始前に `note2zennController` で検証）
+3. どちらも無い場合は **エラー**（変換開始前に `validation/conversionInput` で検証）
 
 ※ `analysisService` 単体では、basename 未指定時に note の slug へフォールバックする実装がありますが、サイドバー・コマンドパレットからの実行では上記 1〜3 が適用されます。
 
@@ -116,6 +117,8 @@ note で公開した記事を、Zenn に投稿しやすい形式（Markdown + �
 - OpenAI API のみ。モデルは `note2zenn.openAiModel`（未設定時 `gpt-4.1-mini`）
 - `temperature: 0`
 - プロンプト: `prompts/system_prompt.txt` + user 側に `converter_config` と記事本文
+- 応答は JSON `{ "body": "…", "tags": ["…"] }` を期待。`tags` は記事内容に即した Zenn 向けタグ（最大 5 個、**1タグ＝1単語・ハイフン繋ぎなし**）
+- JSON のパースに失敗した場合: 応答全文を本文とみなし、`tags` は空配列（フロントマター `tags: []`）
 
 ### 4.5 出力（Output）
 
@@ -185,7 +188,6 @@ export interface ParsedArticle {
   slug: string;       // note 由来（LLM 用）
   assetDir: string;   // ファイル・画像フォルダ名
   markdown: string;
-  tags: string[];
   images: ImageAsset[];
 }
 ```
@@ -196,7 +198,8 @@ export interface ParsedArticle {
 src/
   extension.ts
   sidebarViewProvider.ts
-  note2zennController.ts
+  conversion/runConversion.ts
+  settings/ / validation/ / output/
   pipeline.ts
   services/     # fetch, analysis, llm, asset, output, copy, git, config
   types/

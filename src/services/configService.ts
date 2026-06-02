@@ -1,7 +1,7 @@
 /**
  * 実行時設定と変換パラメータの検証・正規化。
  *
- * 拡張側（note2zennController）で集めた設定値を受け取り、
+ * 拡張側で集めた設定値を受け取り、
  * パイプラインが使える RuntimeConfig / ConverterConfig に変換する。
  */
 import { ConverterConfig, RuntimeConfig } from "../types/config.js";

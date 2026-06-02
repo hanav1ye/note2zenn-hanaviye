@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta http-equiv="Content-Security-Policy" content="__CSP__" />
+  <style>
+    body {
+      font-family: var(--vscode-font-family);
+      font-size: var(--vscode-font-size);
+      color: var(--vscode-foreground);
+      padding: 12px;
+      line-height: 1.4;
+    }
+    h2 {
+      font-size: 1em;
+      margin: 16px 0 8px;
+      font-weight: 600;
+    }
+    h2:first-child { margin-top: 0; }
+    label {
+      display: block;
+      margin: 8px 0 4px;
+      font-size: 0.9em;
+      opacity: 0.9;
+    }
+    input, textarea {
+      width: 100%;
+      box-sizing: border-box;
+      background: var(--vscode-input-background);
+      color: var(--vscode-input-foreground);
+      border: 1px solid var(--vscode-input-border, transparent);
+      padding: 6px 8px;
+      border-radius: 2px;
+    }
+    textarea { min-height: 120px; font-family: var(--vscode-editor-font-family); font-size: 0.85em; }
+    button {
+      margin-top: 8px;
+      width: 100%;
+      padding: 8px;
+      background: var(--vscode-button-background);
+      color: var(--vscode-button-foreground);
+      border: none;
+      border-radius: 2px;
+      cursor: pointer;
+    }
+    button.secondary {
+      background: var(--vscode-button-secondaryBackground);
+      color: var(--vscode-button-secondaryForeground);
+    }
+    button:disabled { opacity: 0.5; cursor: default; }
+    .row { display: flex; gap: 6px; }
+    .row button { flex: 1; }
+    .hint { font-size: 0.85em; opacity: 0.85; margin: 0 0 8px; }
+    .status { font-size: 0.85em; margin: 4px 0 8px; }
+    .ok { color: var(--vscode-testing-iconPassed, #89d185); }
+    .ng { color: var(--vscode-errorForeground); }
+    .field-error {
+      font-size: 0.85em;
+      color: var(--vscode-errorForeground);
+      margin: 4px 0 8px;
+      min-height: 1.2em;
+    }
+    #log {
+      margin-top: 12px;
+      padding: 8px;
+      background: var(--vscode-textCodeBlock-background);
+      font-size: 0.8em;
+      white-space: pre-wrap;
+      min-height: 2em;
+    }
+  </style>
+</head>
+<body>
+  <h2>変換</h2>
+  <label for="noteUrl">note URL</label>
+  <input id="noteUrl" type="url" placeholder="https://note.com/..." />
+  <label for="basename">basename</label>
+  <input id="basename" type="text" placeholder="articles/images のベース名" />
+  <button id="runBtn">変換を実行</button>
+
+  <h2>設定</h2>
+  <label for="zennRepoPath">Zenn リポジトリパス</label>
+  <input id="zennRepoPath" type="text" />
+  <label for="openAiModel">OpenAI モデル</label>
+  <input id="openAiModel" type="text" />
+  <label for="defaultBasename">既定 basename（任意）</label>
+  <input id="defaultBasename" type="text" />
+  <label for="converterConfig">converterConfig（JSON）</label>
+  <textarea id="converterConfig"></textarea>
+  <button id="saveSettingsBtn" class="secondary">設定を保存</button>
+  <button id="openSettingsBtn" class="secondary">詳細設定を開く</button>
+
+  <h2>秘密情報</h2>
+  <p class="hint">4 つすべて「設定済み」になるまで変換できません。</p>
+  <div class="status" id="secretOpenAi"></div>
+  <div class="status" id="secretGithub"></div>
+  <div class="status" id="secretGitName"></div>
+  <div class="status" id="secretGitEmail"></div>
+  <div class="row">
+    <button class="secondary" data-secret="openAiApiKey">OpenAI Key</button>
+    <button class="secondary" data-secret="githubToken">GitHub Token</button>
+  </div>
+  <div class="row">
+    <button class="secondary" data-secret="gitAuthorName">Git 名前</button>
+    <button class="secondary" data-secret="gitAuthorEmail">Git メール</button>
+  </div>
+  <div id="secretsError" class="field-error" role="alert"></div>
+
+  <div id="log"></div>
+
+  <script src="__SCRIPT_URI__"></script>
+</body>
+</html>

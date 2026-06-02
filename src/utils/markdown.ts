@@ -54,6 +54,19 @@ export const normalizeTag = (tag: string): string => {
     .toLowerCase();
 };
 
+/**
+ * Zenn タグ用: ハイフン・空白で区切られた語を単語タグに分解する（ハイフン繋ぎは作らない）。
+ */
+export const splitZennTagWords = (tag: string): string[] => {
+  const parts = tag
+    .trim()
+    .toLowerCase()
+    .split(/[\s\-_]+/u)
+    .map((part) => part.replace(/[^\p{Letter}\p{Number}]/gu, ""))
+    .filter((part) => part.length >= 2 && part.length <= 20);
+  return parts;
+};
+
 const MARKDOWN_IMAGE_LINE_PATTERN = /^!\[[^\]]*\]\([^)]+\)\s*$/;
 
 /** 本文末尾に連続する `![...](...)` 行（と空行）を除去 */

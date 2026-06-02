@@ -8,10 +8,12 @@ note2zenn のコード構成と、変換パイプラインの詳細です。
 ```mermaid
 flowchart TB
   UI[sidebarViewProvider / extension.ts]
-  CTRL[note2zennController.ts]
+  RUN[conversion/runConversion.ts]
+  VAL[validation/conversionInput.ts]
   PL[pipeline.ts]
-  UI --> CTRL
-  CTRL --> PL
+  UI --> RUN
+  RUN --> VAL
+  RUN --> PL
   PL --> F[fetchService]
   PL --> A[analysisService]
   PL --> L[llmService]
@@ -22,9 +24,11 @@ flowchart TB
 
 | 層 | 役割 |
 |----|------|
-| UI | Activity Bar の Webview サイドバー（主）、コマンドパレット（補助） |
-| Controller | 設定・SecretStorage・入力検証・ログ・進捗表示 |
-| Pipeline | Fetch → Analysis → Inference → Output → Copy → Publish の順実行 |
+| UI | Activity Bar の Webview（`media/sidebar.html` + `sidebar.js`）、コマンドパレット |
+| 設定 / Secret | `settings/workspaceSettings.ts`, `settings/secrets.ts` |
+| 検証 | `validation/conversionInput.ts`（単一定義元） |
+| 変換入口 | `conversion/runConversion.ts` |
+| Pipeline | Fetch → Analysis → Inference → Output → Copy → Publish |
 | Services | 各ステップの具体的処理 |
 
 **廃止済み**: CLI（`src/index.ts`）、Docker、`docker-compose.yml`、`.env.example`、ルートの `converter-config.json`。設定は VSCode 設定と SecretStorage に集約。
@@ -40,18 +44,18 @@ flowchart TB
 ### `src/sidebarViewProvider.ts`
 
 - Webview ID: `note2zenn.sidebar`
-- `postMessage` で双方向通信（設定保存、Secret 入力トリガー、変換実行）
-- CSP: `default-src 'none'`、script は nonce 付きのみ許可
+- HTML: `media/sidebar.html`（`webview/loadSidebarHtml.ts` で読み込み）
+- JS: `media/sidebar.js`（検証ロジックは持たず、ホストから `canRun` / `secretsError` を受け取る）
 
-### `src/note2zennController.ts`
+### `src/settings/`・`src/validation/`・`src/conversion/`
 
-| 機能 | 内容 |
-|------|------|
-| `readSettings` / `saveSettings` | `note2zenn.zennRepoPath`, `openAiModel`, `defaultAnalysisBasename`, `converterConfig` |
-| SecretStorage キー | `note2zenn.openaiApiKey`, `githubToken`, `gitAuthorName`, `gitAuthorEmail` |
-| `validateNoteUrl` | ホストに `note.com` を含む URL のみ許可 |
-| `executeConversion` | 必須チェック後 `pipeline.runConversion` を呼ぶ |
-| ログ | Output チャンネル `Note2Zenn` + `console.log` |
+| モジュール | 内容 |
+|------------|------|
+| `workspaceSettings.ts` | `readSettings` / `saveSettings` |
+| `secrets.ts` | SecretStorage の読み書き |
+| `conversionInput.ts` | URL・Secret・basename・converterConfig JSON の検証 |
+| `runConversion.ts` | `executeConversion` / `runConversionWithProgress` |
+| `output/outputChannel.ts` | Output チャンネル `Note2Zenn` |
 
 ## 3. パイプライン `src/pipeline.ts`
 
@@ -60,7 +64,7 @@ flowchart TB
 | Initialize | `loadRuntimeConfig`, `loadConverterConfig`, LLM クライアント生成 | `configService`, `llmService` |
 | Fetch | note HTML を GET（15 秒タイムアウト） | `fetchService` |
 | Analysis | HTML → `ParsedArticle` | `analysisService` |
-| Inference | OpenAI で本文リライト（temperature 0） | `llmService` |
+| Inference | OpenAI で本文リライト + タグ生成（JSON `body`/`tags`、temperature 0） | `llmService` |
 | Download / Output | 画像 DL + `articles/<assetDir>.md` 書き出し | `assetService`, `outputService` |
 | Copy | `public/images/<assetDir>/` → Zenn リポ `images/<assetDir>/` | `copyService` |
 | Publish | `git add` / `commit` / `push`（差分なしならスキップ） | `gitService` |
@@ -82,7 +86,7 @@ flowchart TB
 - 本文を Markdown 化（`<br>` → ハード改行 `  \n`）
 - 画像 URL を `/images/<assetDir>/filename` 形式に変換
 - `figcaption` → alt テキスト
-- 技術タグのヒューリスティック抽出（最大 5 件）
+- タグは Inference で OpenAI が生成（本ステップでは作らない）
 - `assetDir`: サイドバーの basename → 未入力なら `defaultAnalysisBasename`（UI 経由で両方空なら controller がエラー。pipeline 直呼び時のみ slug フォールバック）
 
 ### `llmService.ts`
@@ -123,7 +127,7 @@ flowchart TB
 
 ### `src/types/article.ts`
 
-- `ParsedArticle`: `title`, `slug`, `assetDir`, `markdown`, `tags`, `images`
+- `ParsedArticle`: `title`, `slug`, `assetDir`, `markdown`, `images`
 - `ImageAsset`: `originalUrl`, `localFileName`, `localPath`, `altText`
 
 ### `src/types/config.ts`

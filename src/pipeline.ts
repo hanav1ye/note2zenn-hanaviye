@@ -51,12 +51,23 @@ export const runConversion = async (input: RunConversionInput): Promise<string> 
   logStepEnd("Analysis");
 
   logStepStart("Inference");
-  const rewritten = await llmClient.rewrite(article.markdown, converterConfig, article.slug);
+  const rewriteResult = await llmClient.rewrite(
+    article.markdown,
+    converterConfig,
+    article.slug,
+    article.title
+  );
   logStepEnd("Inference");
 
   logStepStart("Download / Output");
   await downloadImages(article);
-  const articlePath = await writeArticle(article, rewritten, runtimeConfig.zennRepoPath, article.assetDir);
+  const articlePath = await writeArticle(
+    article,
+    rewriteResult.markdown,
+    runtimeConfig.zennRepoPath,
+    article.assetDir,
+    rewriteResult.tags
+  );
   logStepEnd("Download / Output");
 
   logStepStart("Copy");

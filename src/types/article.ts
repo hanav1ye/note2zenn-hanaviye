@@ -1,7 +1,7 @@
 /**
  * Analysis ステップの出力データモデル。
  *
- * ParsedArticle … タイトル・本文 Markdown・画像一覧・タグ
+ * ParsedArticle … タイトル・本文 Markdown・画像一覧
  * ImageAsset … 各画像の元 URL と Zenn 内参照パス
  */
 
@@ -34,8 +34,6 @@ export interface ParsedArticle {
   assetDir: string;
   /** Zenn向け本文Markdown（推論・公開パイプライン用。`/images/<assetDir>/` 参照）。 */
   markdown: string;
-  /** Zenn用に正規化したタグ一覧。 */
-  tags: string[];
   /** 記事に含まれる画像アセット一覧。 */
   images: ImageAsset[];
 }

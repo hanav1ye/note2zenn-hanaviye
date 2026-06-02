@@ -110,13 +110,14 @@ export const writeArticle = async (
   article: ParsedArticle,
   rewrittenMarkdown: string,
   zennRepoPath: string,
-  articleFileBasename: string
+  articleFileBasename: string,
+  tags: string[]
 ): Promise<string> => {
   const articlesDir = path.join(zennRepoPath, "articles");
   await fs.mkdir(articlesDir, { recursive: true });
   const filePath = path.join(articlesDir, `${articleFileBasename}.md`);
 
-  const frontMatter = buildFrontMatter(article.title, article.tags);
+  const frontMatter = buildFrontMatter(article.title, tags);
   const sanitizedBody = stripTitleFromBody(rewrittenMarkdown, article.title);
   const bodyWithoutTagCollection = stripTrailingTagCollection(sanitizedBody);
   const bodyWithoutTrailingImages = stripTrailingMarkdownImages(bodyWithoutTagCollection);

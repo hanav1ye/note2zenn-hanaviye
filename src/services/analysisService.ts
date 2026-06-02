@@ -1,8 +1,13 @@
+/**
+ * note 記事 HTML の解析（Analysis ステップ）。
+ *
+ * タイトル・本文 Markdown・画像一覧を抽出する。タグは Inference（OpenAI）で生成する。
+ */
 import * as cheerio from "cheerio";
 import type { CheerioAPI } from "cheerio";
 import path from "node:path";
 import { ParsedArticle } from "../types/article.js";
-import { normalizeTag, resolveAnalysisMarkdownBasename, stripTrailingMarkdownImages, toSlug } from "../utils/markdown.js";
+import { resolveAnalysisMarkdownBasename, stripTrailingMarkdownImages, toSlug } from "../utils/markdown.js";
 
 /**
  * Markdownで衝突しやすい記号をエスケープする。
@@ -38,82 +43,6 @@ const resolveImageUrl = (src: string, baseUrl: string): string | null => {
  */
 const isDownloadableImageUrl = (value: string): boolean => {
   return value.startsWith("http://") || value.startsWith("https://");
-};
-
-/**
- * 本文から技術テーマ語を抽出してタグ候補を作る。
- * @param markdown 本文Markdown
- * @returns Zenn向けタグ一覧
- */
-const extractTechnicalTags = (markdown: string): string[] => {
-  const keywordPattern = /[A-Za-z][A-Za-z0-9+#.\-]{1,}|[ァ-ヶー]{2,}|[一-龠々]{2,}/gu;
-  const blockedWords = new Set<string>([
-    "note",
-    "zenn",
-    "記事",
-    "目的",
-    "計画",
-    "注意点",
-    "今回",
-    "自分",
-    "読者",
-    "開発記"
-  ]);
-  const preferredTerms = [
-    "llm",
-    "ai",
-    "openai",
-    "gemma",
-    "cursor",
-    "claude",
-    "chatgpt",
-    "api",
-    "docker",
-    "typescript",
-    "node",
-    "markdown",
-    "zenn",
-    "note"
-  ];
-
-  const rawTokens = markdown.match(keywordPattern) ?? [];
-  const counts = new Map<string, number>();
-  for (const token of rawTokens) {
-    const normalized = normalizeTag(token);
-    if (!normalized) {
-      continue;
-    }
-    if (normalized.length < 2 || normalized.length > 20) {
-      continue;
-    }
-    if (blockedWords.has(normalized)) {
-      continue;
-    }
-    counts.set(normalized, (counts.get(normalized) ?? 0) + 1);
-  }
-
-  const ranked = Array.from(counts.entries()).sort((a, b) => b[1] - a[1]).map(([word]) => word);
-  const selected: string[] = [];
-
-  for (const preferred of preferredTerms) {
-    if (ranked.includes(preferred) && !selected.includes(preferred)) {
-      selected.push(preferred);
-    }
-    if (selected.length >= 5) {
-      return selected;
-    }
-  }
-
-  for (const word of ranked) {
-    if (!selected.includes(word)) {
-      selected.push(word);
-    }
-    if (selected.length >= 5) {
-      break;
-    }
-  }
-
-  return selected;
 };
 
 /**
@@ -510,17 +439,15 @@ export const analyzeHtml = (
     $(figure).replaceWith(markdown);
   });
 
-  // 本文 HTML → Markdown 変換 → 末尾画像行の再除去 → タグ抽出
+  // 本文 HTML → Markdown 変換 → 末尾画像行の再除去
   const bodyText = $("article").html() ?? $("body").html() ?? "";
   const markdown: string = stripTrailingMarkdownImages(articleHtmlToMarkdownish(bodyText, baseUrl));
-  const tags = extractTechnicalTags(markdown);
 
   return {
     title,
     slug,
     assetDir,
     markdown,
-    tags,
     images: filterImagesReferencedInMarkdown(imageMap, markdown, assetDir)
   };
 };
