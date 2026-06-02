@@ -1,80 +1,142 @@
-# note2zenn 要件定義・方式設計書 (v2.0)
+# note2zenn 要件定義・方式設計
 
-note 記事を、Zenn に投稿可能な Markdown・画像・Git 反映まで自動化する **VSCode 拡張**。
+note 記事を Zenn 向け Markdown に変換し、画像配置と Git 反映まで行う **VSCode 拡張**の設計書です。
+
+## 0. 免責（必読）
+
+**本ツールの利用により生じる一切のトラブルは、利用者（使用者）の責任に帰属します。**  
+提供者は変換品質・公開内容・料金・データ損失等を保証しません。  
+全文は [DISCLAIMER.md](DISCLAIMER.md) を参照してください。
 
 ## 1. プロジェクト概要
 
-note 記事を OpenAI API で Zenn 向けに最適化し、記事・画像の配置と Git 公開まで実行する。  
-「設定は GUI で完結」「OpenAI 固定」「運用自動化」をコア価値とする。
+### 1.1 目的
+
+note で公開した記事を、Zenn に投稿しやすい形式（Markdown + 画像 + フロントマター）へ変換し、ローカルの Zenn 用 git リポジトリへ反映するまでを、エディタ上の操作で完結させる。
+
+### 1.2 スコープ内
+
+- note 記事 URL からの HTML 取得と解析
+- OpenAI API による本文リライト（文体パラメータ付き）
+- 画像のダウンロードと Zenn リポへの配置
+- `articles/*.md` の生成（下書き `published: false`）
+- 変更がある場合の `git add` / `commit` / `push`
+
+### 1.3 スコープ外（非目標）
+
+- note 公式 API との連携（HTML スクレイピング方式）
+- Ollama 等、OpenAI 以外の推論エンジン
+- Docker / CLI 単体実行（廃止済み）
+- サーバとしての公開・マルチテナント運用
+- 変換結果の法的・著作権上の適合性の保証
 
 ## 2. システムコンセプト
 
-- **拡張 UI 完結**: サイドバー Webview で設定・秘密情報・変換実行を行う（ソース編集不要）。
-- **OpenAI 固定**: 推論は OpenAI API のみ（Ollama / CLI / Docker は廃止）。
-- **アセット完全移行**: 画像をローカルへ保存し、本文参照を `/images/{basename}/filename` に統一。
-- **独自性の継承**: `note2zenn.converterConfig` の数値 + Few-shot で文体制御。
-- **運用一気通貫**: 変換後は Zenn リポジトリへコピーし、`Publish` で `git add/commit/push` まで実行。
+| コンセプト | 内容 |
+|------------|------|
+| UI 完結 | サイドバー Webview で設定・秘密情報・変換を行う（`.env` 不要） |
+| OpenAI 固定 | 推論は OpenAI Chat Completions のみ |
+| アセット移行 | 画像をローカル保存し、本文参照を `/images/{assetDir}/` に統一 |
+| 文体制御 | `converterConfig` の数値軸 + 任意 Few-shot |
+| 一気通貫 | 変換から Zenn リポへのコピー・Git 公開までパイプライン化 |
 
-## 3. 実行方式（アーキテクチャ）
+## 3. アーキテクチャ
 
-### 3.1 構成
+### 3.1 構成要素
 
-- **VSCode 拡張**: Activity Bar の Note2Zenn サイドバーが主 UI
-- **コアパイプライン**: `src/pipeline.ts` + `src/services/*`（Fetch〜Publish）
-- **設定**: VSCode 設定（`note2zenn.*`）+ SecretStorage（API キー・Git 情報）
+```
+[ユーザー]
+    ↓ note URL, basename, 設定
+[VSCode 拡張]
+  extension.ts / sidebarViewProvider.ts
+  note2zennController.ts
+    ↓
+  pipeline.ts
+    ↓
+  services/*  →  note.com / OpenAI / ローカル FS / git / GitHub
+```
 
 ### 3.2 データフロー
 
-1. **Initialize**: サイドバー入力（note URL / basename）と設定・SecretStorage を検証
-2. **Fetch**: note 記事 HTML を取得
-3. **Analysis**: タイトル正規化、画像 URL 抽出（見出し・末尾画像除外）、技術タグ抽出
-4. **Inference**: `ConverterConfig` + system prompt を OpenAI に渡してリライト
-5. **Download / Output**: 画像保存、本文後処理、フロントマター付き Markdown 出力
-6. **Copy**: Zenn リポジトリへ画像をコピー
-7. **Publish**: `git add/commit/push` を自動実行（差分なし時はスキップ）
+1. **Initialize** — 設定・Secret・basename を検証し LLM クライアントを準備
+2. **Fetch** — note 記事 HTML を HTTP GET
+3. **Analysis** — タイトル・本文 Markdown・画像・タグを抽出
+4. **Inference** — `system_prompt.txt` + `converterConfig` で OpenAI リライト
+5. **Download / Output** — 画像保存、`articles/<assetDir>.md` 生成
+6. **Copy** — 画像を Zenn リポ `images/<assetDir>/` へコピー
+7. **Publish** — Git で commit / push（ステージ済み差分がなければ何もしない）
 
 ### 3.3 設定の置き場所
 
 | 種別 | 保存先 | 例 |
 |------|--------|-----|
-| 通常設定 | VSCode 設定 `note2zenn.*` | `zennRepoPath`, `openAiModel`, `converterConfig` |
+| 通常設定 | VSCode `note2zenn.*` | `zennRepoPath`, `openAiModel`, `converterConfig` |
 | 秘密情報 | SecretStorage | OpenAI API キー、GitHub token、Git author |
-| 実行時入力 | サイドバー | note URL、basename |
+| 実行時入力 | サイドバー（またはコマンド） | note URL、basename |
 
 ## 4. 機能要件
 
-- **推論エンジン**: OpenAI API 固定（モデル名は `note2zenn.openAiModel` で指定）
-- **画像パスの置換**: `/images/{basename}/filename` 形式への自動リネームと置換
-- **見出し画像除外**: note のアイキャッチを本文・ダウンロード対象から除外
-- **末尾画像除外**: 記事末尾のプロフィール等画像を DOM / Markdown から除去
-- **キャプションの Alt 反映**: `figcaption` のテキストを画像の Alt テキストに反映
-- **Zenn 最適化**: `published: false`（下書き）固定、note のタグを Zenn 形式へ変換
-- **Git 反映**: 設定した Zenn リポジトリへ commit / push（token 設定時は HTTPS 認証）
-- **進捗管理**: 各ステップの開始・終了ログ（Output チャンネル `Note2Zenn`）
+### 4.1 入力・検証
 
-## 5. 共通仕様
+- note URL は `note.com` ホストを含むこと
+- `zennRepoPath`・OpenAI API キー・basename（または既定 basename）が必須
 
-- 各ステップでの進捗ログ出力
-- 異常時はエラーメッセージを通知し、Output に詳細を記録
+### 4.2 解析（Analysis）
 
-## 6. プロジェクト構造と定義ファイル
+- タイトルから著者名サフィックスを除去
+- アイキャッチ・末尾プロフィール画像を本文・DL 対象から除外
+- 画像パスを `/images/{assetDir}/filename` に変換
+- `figcaption` を alt に反映
+- 技術タグを本文からヒューリスティック抽出（最大 5）
 
-### 6.1 ディレクトリと主要ファイル
+`assetDir` の決定（通常の UI 経由）:
 
-- `/src/extension.ts`（拡張エントリ）
-- `/src/sidebarViewProvider.ts`（サイドバー Webview）
-- `/src/note2zennController.ts`（設定・SecretStorage・実行制御）
-- `/src/pipeline.ts`（変換パイプライン）
-- `/src/services/*`（Fetch / Analysis / LLM / Output / Copy / Git）
-- `/prompts/system_prompt.txt`（system prompt）
-- `/public/images`（ダウンロード画像の作業用。Zenn リポへコピー）
-- Zenn リポジトリ側: `articles/`（推論後 Markdown）、`images/`
+1. サイドバー入力の basename（空なら次へ）
+2. 設定 `defaultAnalysisBasename`
+3. どちらも無い場合は **エラー**（変換開始前に `note2zennController` で検証）
 
-### 6.2 主要データモデル（TypeScript）
+※ `analysisService` 単体では、basename 未指定時に note の slug へフォールバックする実装がありますが、サイドバー・コマンドパレットからの実行では上記 1〜3 が適用されます。
 
-#### ParameterSetting
+### 4.3 推論（Inference）
 
-各パラメータの強度と、AI に「目盛り」を教えるための実例（Few-shot）を管理する。
+- OpenAI API のみ。モデルは `note2zenn.openAiModel`（未設定時 `gpt-4.1-mini`）
+- `temperature: 0`
+- プロンプト: `prompts/system_prompt.txt` + user 側に `converter_config` と記事本文
+
+### 4.4 出力（Output）
+
+- フロントマター: `published: false` 固定（Zenn 上は下書き）
+- `type: tech`, `emoji: 📝`（固定値）
+- 本文は LLM 出力を後処理（タイトル重複除去、note 末尾タグ除去など）
+
+### 4.5 Git（Publish）
+
+- 対象: `articles/<assetDir>.md`, `images/<assetDir>/`
+- commit メッセージ: `add <assetDir>`
+- push: ローカルに設定された `origin` を使用
+- GitHub Token あり + HTTPS リモート: トークン埋め込み URL で push
+- Token なし: 通常の `git push`（SSH 等は利用者環境に依存）
+
+**push は自動実行される。** 利用者が事前に diff を確認する運用を前提とする（免責参照）。
+
+### 4.6 進捗・エラー
+
+- 各ステップの `[START]` / `[END]` を Output チャンネル `Note2Zenn` に出力
+- 失敗時はエラー通知 + Output にメッセージ
+
+## 5. 非機能要件
+
+| 項目 | 方針 |
+|------|------|
+| 実行環境 | 利用者のローカル VSCode / Cursor |
+| 秘密情報 | SecretStorage のみ（平文 `.env` は使わない） |
+| 責任分界 | 設定・公開判断・権利確認はすべて利用者（[DISCLAIMER.md](DISCLAIMER.md)） |
+| 可用性 | ベストエフォート。第三者 API・note HTML 変更に依存 |
+| セキュリティ | 脆弱性報告は [SECURITY.md](SECURITY.md) |
+
+## 6. データモデル（主要型）
+
+### ParameterSetting / FewShotExample
 
 ```typescript
 export interface FewShotExample {
@@ -83,14 +145,12 @@ export interface FewShotExample {
 }
 
 export interface ParameterSetting {
-  value: number;
+  value: number; // 0.0 〜 1.0
   example?: FewShotExample[];
 }
 ```
 
-#### ConverterConfig（多変量パラメータ管理）
-
-VSCode 設定 `note2zenn.converterConfig` に保持する。
+### ConverterConfig
 
 ```typescript
 export interface ConverterConfig {
@@ -103,7 +163,55 @@ export interface ConverterConfig {
 }
 ```
 
-## 7. 運用・保守
+### ParsedArticle
 
-- **非破壊原則**: AI は原文の事実と体験を 100% 維持する。
-- **秘密情報**: API キー・トークンは SecretStorage のみ。平文ファイルに保存しない。
+```typescript
+export interface ParsedArticle {
+  title: string;
+  slug: string;       // note 由来（LLM 用）
+  assetDir: string;   // ファイル・画像フォルダ名
+  markdown: string;
+  tags: string[];
+  images: ImageAsset[];
+}
+```
+
+## 7. ディレクトリ構成（現行）
+
+```
+src/
+  extension.ts
+  sidebarViewProvider.ts
+  note2zennController.ts
+  pipeline.ts
+  services/     # fetch, analysis, llm, asset, output, copy, git, config
+  types/
+  utils/
+prompts/system_prompt.txt
+public/images/          # 実行時に <assetDir>/ が作成される
+media/note2zenn.png
+dist/                     # ビルド成果物（VSIX はここを実行）
+```
+
+Zenn リポジトリ側（利用者が指定）:
+
+- `articles/<assetDir>.md`
+- `images/<assetDir>/`
+
+## 8. 廃止した構成
+
+以下は v2.0（VSCode 拡張化）以降 **存在しません**。
+
+- `src/index.ts`（CLI エントリ）
+- `Dockerfile`, `docker-compose.yml`
+- `.env.example`
+- ルート `converter-config.json`（→ `note2zenn.converterConfig` に統合）
+
+## 9. 関連ドキュメント
+
+| ドキュメント | 内容 |
+|--------------|------|
+| [SETUP_AND_WORKFLOW.md](SETUP_AND_WORKFLOW.md) | 利用手順 |
+| [SOURCE_AND_FLOW.md](SOURCE_AND_FLOW.md) | 実装の詳細 |
+| [DISCLAIMER.md](DISCLAIMER.md) | 免責・利用者責任 |
+| [SECURITY.md](SECURITY.md) | 脆弱性報告 |

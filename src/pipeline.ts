@@ -1,3 +1,10 @@
+/**
+ * 記事変換パイプライン。
+ *
+ * note URL を受け取り、以下を順番に実行する:
+ *   Initialize → Fetch → Analysis → Inference
+ *   → Download/Output → Copy → Publish
+ */
 import { downloadImages } from "./services/assetService.js";
 import { analyzeHtml } from "./services/analysisService.js";
 import { loadConverterConfig, loadRuntimeConfig } from "./services/configService.js";
@@ -24,9 +31,6 @@ export interface RunConversionInput {
   converterConfig: unknown;
 }
 
-/**
- * note URL を入口に記事変換〜公開までの処理を実行する。
- */
 export const runConversion = async (input: RunConversionInput): Promise<string> => {
   const runtimeConfig: RuntimeConfig = loadRuntimeConfig({
     ...input.runtimeConfig,

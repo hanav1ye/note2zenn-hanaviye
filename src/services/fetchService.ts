@@ -1,11 +1,9 @@
+/**
+ * note 記事 URL から HTML を取得（Fetch ステップ）。
+ */
 import axios from "axios";
 
-/**
- * note記事のHTMLを取得する。
- * @param url 取得対象URL
- * @returns HTML文字列
- * @throws {Error} HTTPエラー時（404はURL誤り・非公開・削除の可能性を明示）
- */
+/** 15 秒タイムアウト付きで note 記事 HTML を GET する */
 export const fetchNoteHtml = async (url: string): Promise<string> => {
   try {
     const response = await axios.get<string>(url, {
@@ -17,6 +15,7 @@ export const fetchNoteHtml = async (url: string): Promise<string> => {
     if (axios.isAxiosError(error)) {
       const status = error.response?.status;
       const statusText = error.response?.statusText ?? "";
+      // 404 は URL 誤り・非公開・削除の可能性が高いのでメッセージを分ける
       if (status === 404) {
         throw new Error(
           `note URL returned 404. Use a real article URL (not placeholders like xxx/n/yyy). url=${url}`

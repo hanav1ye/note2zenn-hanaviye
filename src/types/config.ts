@@ -1,4 +1,11 @@
 /**
+ * 実行時設定・変換パラメータの型定義。
+ *
+ * RuntimeConfig … 拡張設定 + SecretStorage から pipeline へ渡す値
+ * ConverterConfig … note2zenn.converterConfig（LLM リライトのトーン調整）
+ */
+
+/**
  * 変換パラメータの値とFew-shot例を保持する設定単位。
  */
 export interface FewShotExample {
@@ -49,7 +56,7 @@ export interface RuntimeConfig {
   zennRepoPath: string;
   /**
    * `articles/` の Markdown ファイル名と `images/` 配下フォルダ名のベース（拡張子なし）。
-   * `.env` の `ANALYSIS_MARKDOWN_BASENAME`。未設定時は記事スラッグ。
+   * サイドバー入力または note2zenn.defaultAnalysisBasename。未設定時は記事スラッグ。
    */
   analysisMarkdownBasename?: string;
   /** Git commit author name. */

@@ -1,3 +1,12 @@
+/**
+ * VSCode 拡張のエントリポイント。
+ *
+ * 役割:
+ * - サイドバー Webview の登録
+ * - コマンドパレット用コマンドの登録（サイドバーの補助入口）
+ *
+ * 変換ロジック本体は note2zennController → pipeline に委譲する。
+ */
 import * as vscode from "vscode";
 import {
   SECRET_GIT_AUTHOR_EMAIL,
@@ -11,6 +20,7 @@ import { Note2ZennSidebarProvider } from "./sidebarViewProvider.js";
 
 let sidebarProvider: Note2ZennSidebarProvider | undefined;
 
+/** コマンドパレット経由の入力用（サイドバー未使用時のフォールバック）。 */
 const promptRequired = async (prompt: string): Promise<string | undefined> => {
   const value = await vscode.window.showInputBox({
     prompt,
@@ -21,6 +31,7 @@ const promptRequired = async (prompt: string): Promise<string | undefined> => {
 };
 
 export const activate = (context: vscode.ExtensionContext): void => {
+  // サイドバー Webview（主 UI）を登録
   sidebarProvider = new Note2ZennSidebarProvider(context);
   context.subscriptions.push(
     vscode.window.registerWebviewViewProvider(Note2ZennSidebarProvider.viewType, sidebarProvider, {
@@ -36,6 +47,7 @@ export const activate = (context: vscode.ExtensionContext): void => {
     sidebarProvider?.focus();
   });
 
+  // SecretStorage へ保存するコマンド群（保存後はサイドバー表示を更新）
   register("note2zenn.setOpenAiApiKey", async () => {
     if (await storeSecret(context, SECRET_OPENAI_API_KEY, "OpenAI API key", true)) {
       await sidebarProvider?.refresh();
@@ -64,6 +76,7 @@ export const activate = (context: vscode.ExtensionContext): void => {
     await vscode.commands.executeCommand("workbench.action.openSettings", "@ext:hanaviye.note2zenn-hanaviye");
   });
 
+  // コマンドパレットから note URL / basename を入力して変換
   register("note2zenn.runConversion", async () => {
     const noteUrl = await promptRequired("note URL (https://note.com/...)");
     if (!noteUrl) {

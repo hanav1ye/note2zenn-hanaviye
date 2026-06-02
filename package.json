@@ -30,7 +30,7 @@
         {
           "id": "note2zenn",
           "title": "Note2Zenn",
-          "icon": "media/note2zenn.png"
+          "icon": "media/note2zenn.svg"
         }
       ]
     },
@@ -158,7 +158,7 @@
     "package": "npm run build && npx --yes @vscode/vsce package"
   },
   "dependencies": {
-    "axios": "^1.9.0",
+    "axios": "^1.16.1",
     "cheerio": "^1.0.0",
     "openai": "^4.100.0",
     "slugify": "^1.6.6"

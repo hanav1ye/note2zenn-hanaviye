@@ -1,3 +1,9 @@
+/**
+ * Zenn リポへの git commit / push（Publish ステップ）。
+ *
+ * articles/<basename>.md と images/<assetDir>/ を stage し、
+ * 差分がなければスキップ。GitHub Token がある場合は HTTPS push に埋め込む。
+ */
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { ParsedArticle } from "../types/article.js";
@@ -6,11 +12,7 @@ const execFileAsync = promisify(execFile);
 
 type ExecFileError = Error & { stderr?: string };
 
-/**
- * git 実行失敗時に権限系のヒントを付与する。
- * @param repoPath Zenn リポジトリのルートパス
- * @param error 実行エラー
- */
+/** 権限・所有権エラー時に zennRepoPath の確認を促すメッセージを付与 */
 const rethrowGitError = (repoPath: string, error: unknown): never => {
   const execError = error as ExecFileError;
   const detail = `${execError.stderr ?? ""}${execError.message ?? ""}`.trim();
@@ -31,21 +33,11 @@ const rethrowGitError = (repoPath: string, error: unknown): never => {
   throw error;
 };
 
-/**
- * Docker 等でホスト所有のリポジトリを操作するときの `safe.directory` 付き git 引数を組み立てる。
- * @param repoPath Zenn リポジトリのルートパス
- * @param args git サブコマンド以降の引数
- * @returns `git` に渡す引数配列
- */
+/** 拡張ホストから別ユーザ所有のリポを触るときの safe.directory 設定 */
 const gitArgsWithSafeDirectory = (repoPath: string, args: string[]): string[] => {
   return ["-c", `safe.directory=${repoPath}`, ...args];
 };
 
-/**
- * 指定ディレクトリでgitコマンドを実行する。
- * @param repoPath Zenn リポジトリのルートパス
- * @param args git引数
- */
 const runGit = async (repoPath: string, args: string[]): Promise<void> => {
   try {
     await execFileAsync("git", gitArgsWithSafeDirectory(repoPath, args), { cwd: repoPath });
@@ -54,12 +46,6 @@ const runGit = async (repoPath: string, args: string[]): Promise<void> => {
   }
 };
 
-/**
- * 指定ディレクトリでgitコマンドを実行し、標準出力を返す。
- * @param repoPath Zenn リポジトリのルートパス
- * @param args git引数
- * @returns 標準出力
- */
 const runGitWithStdout = async (repoPath: string, args: string[]): Promise<string> => {
   try {
     const result = await execFileAsync("git", gitArgsWithSafeDirectory(repoPath, args), { cwd: repoPath });
@@ -69,12 +55,7 @@ const runGitWithStdout = async (repoPath: string, args: string[]): Promise<strin
   }
 };
 
-/**
- * HTTPSリモートURLにトークン認証情報を埋め込む。
- * @param remoteUrl リモートURL
- * @param githubToken GitHubトークン
- * @returns 認証情報付きリモートURL
- */
+/** x-access-token 形式で HTTPS リモート URL にトークンを埋め込む */
 const buildAuthenticatedRemoteUrl = (remoteUrl: string, githubToken: string): string => {
   const url = new URL(remoteUrl);
   url.username = "x-access-token";
@@ -82,12 +63,6 @@ const buildAuthenticatedRemoteUrl = (remoteUrl: string, githubToken: string): st
   return url.toString();
 };
 
-/**
- * Copy後の変更をZennリポジトリへ反映する。
- * @param article 解析済み記事データ
- * @param zennRepoPath Zennリポジトリパス
- * @param articleFileBasename Zenn `articles/` 配下のファイル名ベース（拡張子なし）
- */
 export const publishToZennRepo = async (
   article: ParsedArticle,
   zennRepoPath: string,
@@ -107,12 +82,13 @@ export const publishToZennRepo = async (
 
   await runGit(zennRepoPath, ["add", "--", articlePath, imagePath]);
 
+  // staged 差分がなければ commit / push しない
   try {
     await runGit(zennRepoPath, ["diff", "--cached", "--quiet"]);
     console.log(`[INFO] No changes to publish for ${article.slug}.`);
     return;
   } catch {
-    // diff --quiet exits non-zero when there are staged changes.
+    // diff --quiet は差分があると非ゼロ終了する（正常）
   }
 
   await runGit(zennRepoPath, [
@@ -125,6 +101,7 @@ export const publishToZennRepo = async (
     commitMessage
   ]);
 
+  // Token 未設定、または SSH リモートの場合は通常 push
   if (!githubToken) {
     await runGit(zennRepoPath, ["push"]);
     return;
@@ -136,6 +113,7 @@ export const publishToZennRepo = async (
     return;
   }
 
+  // HTTPS + Token: 認証 URL を一時的に push 先に指定
   const currentBranch = await runGitWithStdout(zennRepoPath, ["rev-parse", "--abbrev-ref", "HEAD"]);
   const authenticatedRemoteUrl = buildAuthenticatedRemoteUrl(remoteUrl, githubToken);
   await runGit(zennRepoPath, ["push", authenticatedRemoteUrl, `HEAD:${currentBranch}`]);

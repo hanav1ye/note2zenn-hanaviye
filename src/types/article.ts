@@ -1,4 +1,11 @@
 /**
+ * Analysis ステップの出力データモデル。
+ *
+ * ParsedArticle … タイトル・本文 Markdown・画像一覧・タグ
+ * ImageAsset … 各画像の元 URL と Zenn 内参照パス
+ */
+
+/**
  * 画像アセットの保存先情報を保持するデータモデル。
  */
 export interface ImageAsset {
@@ -22,7 +29,7 @@ export interface ParsedArticle {
   slug: string;
   /**
    * 画像ディレクトリ名（`images/` 直下）および Markdown ファイル名ベース。
-   * `ANALYSIS_MARKDOWN_BASENAME` 未設定時は `slug` と同じ。
+   * basename 未指定時は `slug` と同じ。
    */
   assetDir: string;
   /** Zenn向け本文Markdown（推論・公開パイプライン用。`/images/<assetDir>/` 参照）。 */

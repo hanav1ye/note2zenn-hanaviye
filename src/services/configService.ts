@@ -1,10 +1,14 @@
+/**
+ * 実行時設定と変換パラメータの検証・正規化。
+ *
+ * 拡張側（note2zennController）で集めた設定値を受け取り、
+ * パイプラインが使える RuntimeConfig / ConverterConfig に変換する。
+ */
 import { ConverterConfig, RuntimeConfig } from "../types/config.js";
+
 const DEFAULT_OPENAI_MODEL = "gpt-4.1-mini" as const;
 
-/**
- * 実行時設定を受け取り、必須値を検証する。
- * VSCode 拡張側で収集した設定値/秘密情報をここで統一的に検証する。
- */
+/** 拡張から渡される実行時設定の生データ */
 interface RuntimeConfigInput {
   zennRepoPath: string;
   openAiApiKey: string;
@@ -16,9 +20,8 @@ interface RuntimeConfigInput {
 }
 
 /**
- * 実行時設定を入力値から読み込み、必須値を検証する。
- * @returns 検証済みの実行時設定
- * @throws {Error} 必須値が不足している場合
+ * 実行時設定を検証し、必須項目が揃った RuntimeConfig を返す。
+ * 任意項目（Git 作者情報など）は値があるときだけ含める。
  */
 export const loadRuntimeConfig = (input: RuntimeConfigInput): RuntimeConfig => {
   const zennRepoPath: string = input.zennRepoPath.trim();
@@ -42,9 +45,9 @@ export const loadRuntimeConfig = (input: RuntimeConfigInput): RuntimeConfig => {
   };
 };
 
-/**
- * 変換パラメータのデフォルト設定。
- */
+// --- ConverterConfig（LLM リライトのトーン調整） ---
+
+/** note2zenn.converterConfig 未設定時のデフォルト値 */
 const defaultConverterConfig: ConverterConfig = {
   logical_density: { value: 0.7 },
   technical_focus: { value: 0.7 },
@@ -53,9 +56,7 @@ const defaultConverterConfig: ConverterConfig = {
   free_instruction: ""
 };
 
-/**
- * 設定値を 0.0-1.0 の範囲に丸める。
- */
+/** 0.0〜1.0 の範囲外や NaN を安全な値に丸める */
 const clamp01 = (value: number): number => {
   if (!Number.isFinite(value)) {
     return 0;
@@ -64,9 +65,8 @@ const clamp01 = (value: number): number => {
 };
 
 /**
- * 変換パラメータ設定オブジェクトを検証/正規化して返す。
- * 拡張設定で一部キーが欠けてもデフォルト値で補完する。
- * @returns 変換設定
+ * 拡張設定の converterConfig を正規化する。
+ * キーが欠けていても defaultConverterConfig で補完し、value は clamp01 する。
  */
 export const loadConverterConfig = (rawConfig: unknown): ConverterConfig => {
   if (!rawConfig || typeof rawConfig !== "object") {

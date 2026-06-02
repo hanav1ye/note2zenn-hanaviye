@@ -334,6 +334,8 @@ const convertNoteHeadingsToAtxMarkdown = ($: CheerioAPI): void => {
   }
 };
 
+// --- HTML → Markdown 風テキスト変換 ---
+
 /**
  * article 本文HTMLをプレーンテキスト化する。
  * strong / b・リンク・コードを Markdown 風に変換してから抽出する。
@@ -348,6 +350,7 @@ const convertNoteHeadingsToAtxMarkdown = ($: CheerioAPI): void => {
 const articleHtmlToMarkdownish = (fragmentHtml: string, baseUrl: string): string => {
   const $ = cheerio.load(`<div id="__article-root">${fragmentHtml}</div>`, null, false);
 
+  // 1. 改行・コードブロック・インライン装飾を Markdown 構文へ置換
   $("br").each((_, el) => {
     $(el).replaceWith(MARKDOWN_HARD_LINE_BREAK);
   });
@@ -388,6 +391,7 @@ const articleHtmlToMarkdownish = (fragmentHtml: string, baseUrl: string): string
     break;
   }
 
+  // 2. リンク（p 内はインライン、外は Zenn カード構文）
   guard = 0;
   while (guard++ < 10000) {
     const linkLeaves = $("#__article-root a[href]").filter((_, el) => $(el).find("a").length === 0);
@@ -400,10 +404,11 @@ const articleHtmlToMarkdownish = (fragmentHtml: string, baseUrl: string): string
     });
   }
 
+  // 3. 見出しを ATX 形式（## など）に変換
   const $root = $("#__article-root");
   convertNoteHeadingsToAtxMarkdown($);
 
-  // `.text()` 直前にブロック境界の改行を付与する（上記 JSDoc 参照）。見出しは上で Markdown 化済みのため対象外。
+  // 4. `.text()` 前にブロック境界の改行を付与（段落・リスト等の区切りを保持）
   for (const el of $root.find("p").toArray()) {
     $(el).append("\n\n");
   }
@@ -418,11 +423,8 @@ const articleHtmlToMarkdownish = (fragmentHtml: string, baseUrl: string): string
 };
 
 /**
- * note記事HTMLを解析し、本文・タグ・画像情報を抽出する。
- * @param html 解析対象HTML
- * @param baseUrl note記事URL
- * @param configuredBasename `.env` の `ANALYSIS_MARKDOWN_BASENAME`（未設定可）
- * @returns 解析済み記事データ
+ * note 記事 HTML を解析し ParsedArticle を返す。
+ * @param configuredBasename サイドバー入力または note2zenn.defaultAnalysisBasename（未設定時は slug）
  */
 export const analyzeHtml = (
   html: string,
@@ -430,11 +432,14 @@ export const analyzeHtml = (
   configuredBasename?: string
 ): ParsedArticle => {
   const $ = cheerio.load(html);
+
+  // メタ情報とファイル名ベース（articles/*.md と images/<basename>/ で共通）
   const rawTitle: string = $("meta[property='og:title']").attr("content") ?? $("title").text().trim() ?? "untitled";
   const title: string = sanitizeTitle(rawTitle);
   const slug: string = toSlug(title);
   const assetDir: string = resolveAnalysisMarkdownBasename(configuredBasename, slug);
 
+  // 画像 URL を収集（figure 優先）。見出し画像は除外
   const imageMap = new Map<string, { fileName: string; altText: string; resolvedUrl: string }>();
   $("figure").each((_, figure) => {
     const image = $(figure).find("img").first();
@@ -463,6 +468,7 @@ export const analyzeHtml = (
 
   removeTrailingImagesFromArticle($, imageMap);
 
+  // img を Markdown 画像構文へ置換（figure 外の単体 img もここで処理）
   $("img").each((_, image) => {
     const src = $(image).attr("src");
     if (!src) {
@@ -495,6 +501,7 @@ export const analyzeHtml = (
     );
   });
 
+  // 残った figure タグを中身の Markdown 画像行だけに置き換え
   $("figure").each((_, figure) => {
     const markdown = $(figure).find("img").first().toString();
     if (!markdown) {
@@ -503,9 +510,9 @@ export const analyzeHtml = (
     $(figure).replaceWith(markdown);
   });
 
+  // 本文 HTML → Markdown 変換 → 末尾画像行の再除去 → タグ抽出
   const bodyText = $("article").html() ?? $("body").html() ?? "";
   const markdown: string = stripTrailingMarkdownImages(articleHtmlToMarkdownish(bodyText, baseUrl));
-
   const tags = extractTechnicalTags(markdown);
 
   return {

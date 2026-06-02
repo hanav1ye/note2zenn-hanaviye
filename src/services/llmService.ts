@@ -1,15 +1,18 @@
+/**
+ * OpenAI API による本文リライト（Inference ステップ）。
+ *
+ * prompts/system_prompt.txt を system メッセージに、
+ * converterConfig と few-shot 例を user メッセージに載せて Chat Completions を呼ぶ。
+ */
 import fs from "node:fs/promises";
 import OpenAI from "openai";
 import { ConverterConfig, FewShotExample, ParameterSetting, RuntimeConfig } from "../types/config.js";
 import { promptPath } from "../utils/paths.js";
 
-/** リライト推論のサンプリング温度。変換再現性のため0に固定する。 */
+/** 変換再現性のため temperature は 0 固定 */
 const INFERENCE_TEMPERATURE = 0 as const;
 
-/**
- * `converter_config` のキー意味をユーザープロンプトに載せる用。
- * `ConverterConfig`（`src/types/config.ts`）の JSDoc と整合させる。
- */
+/** user プロンプトに載せる converter_config 各キーの説明文 */
 const CONVERTER_CONFIG_PARAMETER_LEGEND_LINES: readonly string[] = [
   "converter_config の各キーの意味（各軸の value は強度 0.0〜1.0）:",
   "- logical_density: 論理的・結論優先の度合い",
@@ -20,51 +23,24 @@ const CONVERTER_CONFIG_PARAMETER_LEGEND_LINES: readonly string[] = [
   "- options（任意）: 拡張用の真偽フラグ（例: 技術用語解説の付加など）"
 ];
 
-/**
- * `value` と `free_instruction` をモデルが解釈しやすくするための指示（JSON の隣に載せる）。
- */
+/** value / free_instruction の解釈ルール（JSON の隣に載せる） */
 const CONVERTER_VALUE_APPLICATION_LINES: readonly string[] = [
   "converter_config の value / free_instruction の扱い（リライトに反映すること）:",
   "- few-shot を手本とする度合いは value に合わせる",
   "- free_instruction に非空の文字列があるときは、他の軸と矛盾しない範囲で最優先に従う。"
 ];
 
-/**
- * 記事本文のリライトを行うLLMクライアントの抽象インターフェース。
- */
 export interface LlmClient {
-  /**
-   * 設定に基づいてMarkdown本文をリライトする。
-   * @param inputMarkdown 元本文
-   * @param converterConfig 変換設定
-   * @param slug 記事スラッグ
-   * @returns 変換後本文
-   */
   rewrite(inputMarkdown: string, converterConfig: ConverterConfig, slug: string): Promise<string>;
 }
 
-/**
- * OpenAIを利用するLLMクライアント実装。
- */
 class OpenAiClient implements LlmClient {
   private readonly client: OpenAI;
 
-  /**
-   * @param runtimeConfig 実行時設定
-   * @param systemPrompt システムプロンプト
-   */
   public constructor(private readonly runtimeConfig: RuntimeConfig, private readonly systemPrompt: string) {
     this.client = new OpenAI({ apiKey: runtimeConfig.openAiApiKey });
   }
 
-  /**
-   * OpenAI APIを呼び出して本文をリライトする。
-   * @param inputMarkdown 元本文
-   * @param converterConfig 変換設定
-   * @param slug 記事スラッグ
-   * @returns 変換後本文
-   * @throws {Error} APIレスポンスが空の場合
-   */
   public async rewrite(inputMarkdown: string, converterConfig: ConverterConfig, slug: string): Promise<string> {
     const response = await this.client.chat.completions.create({
       model: this.runtimeConfig.openAiModel,
@@ -82,17 +58,8 @@ class OpenAiClient implements LlmClient {
   }
 }
 
-/**
- * LLMへ渡すユーザープロンプトを構築する。
- * @param markdown 元本文
- * @param converterConfig 変換設定
- * @param slug 記事スラッグ
- * @returns プロンプト文字列
- */
+/** converterConfig と few-shot を含む user プロンプトを組み立てる */
 const buildUserPrompt = (markdown: string, converterConfig: ConverterConfig, slug: string): string => {
-  /**
-   * 軸ごとに value と few-shot を並べ、参照の強さを数値に連動させて説明する（閾値は使わない）。
-   */
   const buildFewShotLines = (label: string, setting: ParameterSetting): string[] => {
     const valueText: string = setting.value.toFixed(2);
     const header: string = `- ${label}: この軸の value=${valueText} が、下の入出力ペアを「手本としてどれだけ参考にするか」の度合い。高いほど例の語感・言い換え方針に寄せ、低いほど例は弱いヒントに留め原文の表現を優先する。`;
@@ -130,11 +97,7 @@ const buildUserPrompt = (markdown: string, converterConfig: ConverterConfig, slu
   ].join("\n");
 };
 
-/**
- * 環境設定に応じたLLMクライアントを生成する。
- * @param runtimeConfig 実行時設定
- * @returns LLMクライアント
- */
+/** system prompt を読み込み OpenAI クライアントを生成する */
 export const createLlmClient = async (runtimeConfig: RuntimeConfig): Promise<LlmClient> => {
   const systemPrompt = await fs.readFile(promptPath, "utf-8");
   return new OpenAiClient(runtimeConfig, systemPrompt);

@@ -1,6 +1,14 @@
+/**
+ * 拡張 UI と変換パイプラインの橋渡し。
+ *
+ * - VSCode 設定（note2zenn.*）の読み書き
+ * - SecretStorage（API キー・Git 情報）の読み書き
+ * - 変換実行前の入力検証とログ出力
+ */
 import * as vscode from "vscode";
 import { runConversion } from "./pipeline.js";
 
+// SecretStorage に保存するキー名
 export const SECRET_OPENAI_API_KEY = "note2zenn.openaiApiKey" as const;
 export const SECRET_GITHUB_TOKEN = "note2zenn.githubToken" as const;
 export const SECRET_GIT_AUTHOR_NAME = "note2zenn.gitAuthorName" as const;
@@ -42,6 +50,8 @@ export interface SecretStatus {
   gitAuthorEmail: boolean;
 }
 
+// --- VSCode 設定（非秘密） ---
+
 export const readSettings = (): Note2ZennSettings => {
   const config = getConfig();
   return {
@@ -64,6 +74,8 @@ export const saveSettings = async (settings: Note2ZennSettings): Promise<void> =
   await config.update("converterConfig", settings.converterConfig, vscode.ConfigurationTarget.Global);
 };
 
+// --- SecretStorage（秘密情報） ---
+
 export const readSecretStatus = async (context: vscode.ExtensionContext): Promise<SecretStatus> => {
   const [openAiApiKey, githubToken, gitAuthorName, gitAuthorEmail] = await Promise.all([
     context.secrets.get(SECRET_OPENAI_API_KEY),
@@ -79,14 +91,48 @@ export const readSecretStatus = async (context: vscode.ExtensionContext): Promis
   };
 };
 
-export const validateNoteUrl = (value: string): void => {
+const SECRET_LABELS: Readonly<Record<keyof SecretStatus, string>> = {
+  openAiApiKey: "OpenAI API Key",
+  githubToken: "GitHub Token",
+  gitAuthorName: "Git Author Name",
+  gitAuthorEmail: "Git Author Email"
+};
+
+/** いずれかの Secret が未設定のときメッセージを返す。すべて設定済みなら undefined。 */
+export const getSecretsValidationError = (secrets: SecretStatus): string | undefined => {
+  const missing = (Object.keys(SECRET_LABELS) as (keyof SecretStatus)[])
+    .filter((key) => !secrets[key])
+    .map((key) => SECRET_LABELS[key]);
+  if (missing.length === 0) {
+    return undefined;
+  }
+  return `次の秘密情報が未設定です: ${missing.join("、")}`;
+};
+
+export const areAllSecretsConfigured = (secrets: SecretStatus): boolean =>
+  getSecretsValidationError(secrets) === undefined;
+
+/** note URL が不正なときメッセージを返す。問題なければ undefined。 */
+export const getNoteUrlValidationError = (value: string): string | undefined => {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return "note URL を入力してください。";
+  }
   try {
-    const url = new URL(value);
+    const url = new URL(trimmed);
     if (!url.hostname.includes("note.com")) {
-      throw new Error("URL host must be note.com.");
+      return "note.com の記事 URL を指定してください。";
     }
+    return undefined;
   } catch {
-    throw new Error("Invalid note URL.");
+    return "URL の形式が正しくありません。";
+  }
+};
+
+export const validateNoteUrl = (value: string): void => {
+  const error = getNoteUrlValidationError(value);
+  if (error) {
+    throw new Error(error);
   }
 };
 
@@ -115,6 +161,8 @@ export const storeSecret = async (
   return true;
 };
 
+// --- 変換実行 ---
+
 export interface RunConversionParams {
   noteUrl: string;
   basename?: string;
@@ -128,20 +176,23 @@ export const executeConversion = async (
   const basenameInput = params.basename?.trim() ?? "";
   validateNoteUrl(noteUrl);
 
+  // 設定と Secret を集約
   const settings = readSettings();
-  const defaultBasename = settings.defaultAnalysisBasename;
-  const analysisBasename = basenameInput || defaultBasename || undefined;
+  const analysisBasename = basenameInput || settings.defaultAnalysisBasename || undefined;
+
+  const secretStatus = await readSecretStatus(context);
+  const secretsError = getSecretsValidationError(secretStatus);
+  if (secretsError) {
+    throw new Error(secretsError);
+  }
 
   const openAiApiKey = (await context.secrets.get(SECRET_OPENAI_API_KEY)) ?? "";
-  const githubToken = (await context.secrets.get(SECRET_GITHUB_TOKEN)) ?? undefined;
-  const gitAuthorName = (await context.secrets.get(SECRET_GIT_AUTHOR_NAME)) ?? undefined;
-  const gitAuthorEmail = (await context.secrets.get(SECRET_GIT_AUTHOR_EMAIL)) ?? undefined;
+  const githubToken = (await context.secrets.get(SECRET_GITHUB_TOKEN)) ?? "";
+  const gitAuthorName = (await context.secrets.get(SECRET_GIT_AUTHOR_NAME)) ?? "";
+  const gitAuthorEmail = (await context.secrets.get(SECRET_GIT_AUTHOR_EMAIL)) ?? "";
 
   if (!settings.zennRepoPath) {
     throw new Error("note2zenn.zennRepoPath is not configured.");
-  }
-  if (!openAiApiKey) {
-    throw new Error("OpenAI API key is not configured.");
   }
   if (!analysisBasename) {
     throw new Error("basename is required.");
@@ -170,6 +221,7 @@ export const executeConversion = async (
   return articlePath;
 };
 
+/** 通知付きプログレスバーで変換を実行し、失敗時は Output とエラー通知を出す。 */
 export const runConversionWithProgress = async (
   context: vscode.ExtensionContext,
   params: RunConversionParams

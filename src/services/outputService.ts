@@ -1,14 +1,15 @@
+/**
+ * リライト済み本文を Zenn リポへ書き出し（Output ステップ）。
+ *
+ * フロントマター付与 → 本文の後処理（タイトル重複除去・末尾タグ除去など）
+ * → articles/<basename>.md として Zenn リポに直接保存する。
+ */
 import fs from "node:fs/promises";
 import path from "node:path";
 import { ParsedArticle } from "../types/article.js";
 import { stripTrailingMarkdownImages } from "../utils/markdown.js";
 
-/**
- * Zenn向けフロントマターを生成する。
- * @param title 記事タイトル
- * @param tags タグ一覧
- * @returns フロントマター文字列
- */
+/** Zenn 向け YAML フロントマター（published: false で下書き） */
 const buildFrontMatter = (title: string, tags: string[]): string => {
   const sanitizedTags = tags.slice(0, 5);
   return [
@@ -23,12 +24,7 @@ const buildFrontMatter = (title: string, tags: string[]): string => {
   ].join("\n");
 };
 
-/**
- * 本文先頭のタイトル行を除去する。
- * @param markdown リライト済み本文
- * @param title フロントマター用タイトル
- * @returns タイトル行除去後の本文
- */
+/** LLM 出力先頭の # タイトル行を除去（フロントマターと重複しないように） */
 const stripTitleFromBody = (markdown: string, title: string): string => {
   const lines = markdown.split("\n");
   const normalizedTitle = title.trim();
@@ -53,11 +49,7 @@ const stripTitleFromBody = (markdown: string, title: string): string => {
   return nextLines.join("\n").trim();
 };
 
-/**
- * 本文末尾のタグ集セクションを除去する。
- * @param markdown タイトル除去後の本文
- * @returns タグ集除去後の本文
- */
+/** note 由来の末尾ハッシュタグ列や募集見出しを除去 */
 const stripTrailingTagCollection = (markdown: string): string => {
   const lines = markdown.split("\n");
   const result = [...lines];
@@ -83,11 +75,7 @@ const stripTrailingTagCollection = (markdown: string): string => {
   return result.join("\n").trim();
 };
 
-/**
- * messageブロック構文を正規化する。
- * @param markdown タグ除去後の本文
- * @returns message構文正規化後の本文
- */
+/** Zenn の :::message 構文へ正規化（note 由来の details/message 風記法を吸収） */
 const normalizeMessageBlocks = (markdown: string): string => {
   const lines = markdown.split("\n");
   const normalizedLines: string[] = [];
@@ -118,14 +106,6 @@ const normalizeMessageBlocks = (markdown: string): string => {
   return normalizedLines.join("\n").trim();
 };
 
-/**
- * リライト済み記事を Zenn リポジトリの `articles/` へ直接出力する（本リポジトリには書かない）。
- * @param article 解析済み記事データ
- * @param rewrittenMarkdown リライト済み本文
- * @param zennRepoPath Zenn リポジトリのルートパス
- * @param articleFileBasename 記事ファイル名のベース（拡張子なし）
- * @returns 生成した記事ファイルパス
- */
 export const writeArticle = async (
   article: ParsedArticle,
   rewrittenMarkdown: string,
@@ -135,11 +115,13 @@ export const writeArticle = async (
   const articlesDir = path.join(zennRepoPath, "articles");
   await fs.mkdir(articlesDir, { recursive: true });
   const filePath = path.join(articlesDir, `${articleFileBasename}.md`);
+
   const frontMatter = buildFrontMatter(article.title, article.tags);
   const sanitizedBody = stripTitleFromBody(rewrittenMarkdown, article.title);
   const bodyWithoutTagCollection = stripTrailingTagCollection(sanitizedBody);
   const bodyWithoutTrailingImages = stripTrailingMarkdownImages(bodyWithoutTagCollection);
   const normalizedBody = normalizeMessageBlocks(bodyWithoutTrailingImages);
+
   await fs.writeFile(filePath, `${frontMatter}${normalizedBody}\n`, "utf-8");
   return filePath;
 };

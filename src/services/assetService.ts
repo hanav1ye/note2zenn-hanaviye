@@ -1,15 +1,15 @@
+/**
+ * 解析結果の画像を一時保存（Download ステップ）。
+ *
+ * public/images/<assetDir>/ にダウンロードし、
+ * 後段の copyService で Zenn リポの images/ へコピーする。
+ */
 import axios from "axios";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { ParsedArticle } from "../types/article.js";
 import { publicImagesDir } from "../utils/paths.js";
 
-/**
- * 記事内の画像を指定ベースディレクトリ配下へダウンロードする。
- * @param article 解析済み記事データ
- * @param imagesBaseDir 画像保存の親ディレクトリ
- * @param imageSubDir 親直下のサブディレクトリ名（省略時は `article.assetDir`）
- */
 export const downloadImages = async (
   article: ParsedArticle,
   imagesBaseDir: string = publicImagesDir,

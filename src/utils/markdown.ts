@@ -1,22 +1,20 @@
+/**
+ * Markdown / ファイル名まわりの共通ユーティリティ。
+ *
+ * Analysis・Output 両方から使う:
+ * - スラッグ・basename の決定
+ * - タグ正規化
+ * - 末尾画像行の除去
+ */
 import slugify from "slugify";
 
-/**
- * 任意の文字列を記事スラッグへ変換する。
- * @param value 元文字列
- * @returns URL安全なスラッグ
- */
 export const toSlug = (value: string): string => {
   return slugify(value, { lower: true, strict: true, locale: "ja" }) || "article";
 };
 
-/** ファイル名に使えない文字（Windows 等）。 */
 const INVALID_FILE_NAME_CHARS = /[\\/:*?"<>|]/g;
 
-/**
- * Analysis 出力用ベース名をファイルシステム向けに正規化する。
- * @param value `.env` 等から渡されたベース名（`.md` 付きでも可）
- * @returns 拡張子なしの安全なベース名。空になる場合は空文字列
- */
+/** サイドバー入力の basename をファイルシステム向けに安全化（.md 拡張子は除去） */
 export const sanitizeAnalysisBasename = (value: string): string => {
   let base = value
     .trim()
@@ -36,10 +34,8 @@ export const sanitizeAnalysisBasename = (value: string): string => {
 };
 
 /**
- * Markdown ファイル名ベースを決定する（`articles/` と `images/` で共通）。
- * @param configuredBasename `.env` の `ANALYSIS_MARKDOWN_BASENAME`（未設定可）
- * @param slug 記事スラッグ（未指定時のフォールバック）
- * @returns 拡張子なしのベース名
+ * articles/*.md と images/<dir>/ で共通のベース名を決める。
+ * 未指定時は記事スラッグにフォールバック。
  */
 export const resolveAnalysisMarkdownBasename = (configuredBasename: string | undefined, slug: string): string => {
   const trimmed = configuredBasename?.trim();
@@ -50,11 +46,6 @@ export const resolveAnalysisMarkdownBasename = (configuredBasename: string | und
   return sanitized || slug;
 };
 
-/**
- * タグ文字列をZenn向けに正規化する。
- * @param tag 元タグ
- * @returns 正規化済みタグ
- */
 export const normalizeTag = (tag: string): string => {
   return tag
     .trim()
@@ -63,14 +54,9 @@ export const normalizeTag = (tag: string): string => {
     .toLowerCase();
 };
 
-/** Markdown 1行画像のパターン（`![alt](url)`）。 */
 const MARKDOWN_IMAGE_LINE_PATTERN = /^!\[[^\]]*\]\([^)]+\)\s*$/;
 
-/**
- * 本文末尾に連続する Markdown 画像行（とその前後の空行）を除去する。
- * @param markdown 対象 Markdown
- * @returns 末尾画像除去後の Markdown
- */
+/** 本文末尾に連続する `![...](...)` 行（と空行）を除去 */
 export const stripTrailingMarkdownImages = (markdown: string): string => {
   const lines = markdown.split("\n");
 

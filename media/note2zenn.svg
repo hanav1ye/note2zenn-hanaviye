@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" role="img" aria-label="Note2Zenn">
+  <text
+    x="1"
+    y="17.5"
+    font-family="Georgia, 'Times New Roman', serif"
+    font-size="14"
+    font-weight="700"
+    fill="currentColor"
+  >nZ</text>
+  <path fill="#C9A227" d="M17.2 6.2 18.4 8 19.6 6.2H20.6L19 9.2 17.4 6.2z" />
+</svg>
