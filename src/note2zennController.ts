@@ -91,18 +91,16 @@ export const readSecretStatus = async (context: vscode.ExtensionContext): Promis
   };
 };
 
-const SECRET_LABELS: Readonly<Record<keyof SecretStatus, string>> = {
-  openAiApiKey: "OpenAI API Key",
-  githubToken: "GitHub Token",
-  gitAuthorName: "Git Author Name",
-  gitAuthorEmail: "Git Author Email"
-};
+const SECRET_FIELDS: readonly { key: keyof SecretStatus; label: string }[] = [
+  { key: "openAiApiKey", label: "OpenAI 認証情報" },
+  { key: "githubToken", label: "GitHub 認証情報" },
+  { key: "gitAuthorName", label: "Git 作者名" },
+  { key: "gitAuthorEmail", label: "Git 作者メール" }
+];
 
 /** いずれかの Secret が未設定のときメッセージを返す。すべて設定済みなら undefined。 */
 export const getSecretsValidationError = (secrets: SecretStatus): string | undefined => {
-  const missing = (Object.keys(SECRET_LABELS) as (keyof SecretStatus)[])
-    .filter((key) => !secrets[key])
-    .map((key) => SECRET_LABELS[key]);
+  const missing = SECRET_FIELDS.filter(({ key }) => !secrets[key]).map(({ label }) => label);
   if (missing.length === 0) {
     return undefined;
   }

@@ -9,7 +9,7 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
-  # --- Semgrep ジョブ ---
+  # --- Semgrep ---
   semgrep:
     runs-on: ubuntu-latest
     container:
@@ -18,7 +18,7 @@ jobs:
       - uses: actions/checkout@v6
       - run: semgrep scan --config auto
 
-  # --- Snyk ジョブ ---
+  # --- Snyk ---
   snyk:
     runs-on: ubuntu-latest
     steps:

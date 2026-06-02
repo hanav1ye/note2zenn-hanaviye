@@ -321,13 +321,13 @@ export class Note2ZennSidebarProvider implements vscode.WebviewViewProvider {
     };
 
     const getSecretsValidationError = (secrets) => {
-      const labels = {
-        openAiApiKey: "OpenAI API Key",
-        githubToken: "GitHub Token",
-        gitAuthorName: "Git Author Name",
-        gitAuthorEmail: "Git Author Email"
-      };
-      const missing = Object.keys(labels).filter((key) => !secrets[key]).map((key) => labels[key]);
+      const fields = [
+        { key: "openAiApiKey", label: "OpenAI 認証情報" },
+        { key: "githubToken", label: "GitHub 認証情報" },
+        { key: "gitAuthorName", label: "Git 作者名" },
+        { key: "gitAuthorEmail", label: "Git 作者メール" }
+      ];
+      const missing = fields.filter((f) => !secrets[f.key]).map((f) => f.label);
       if (missing.length === 0) {
         return "";
       }
