@@ -49,9 +49,9 @@ export const loadRuntimeConfig = (input: RuntimeConfigInput): RuntimeConfig => {
 
 /** note2zenn.converterConfig 未設定時のデフォルト値 */
 const defaultConverterConfig: ConverterConfig = {
-  logical_density: { value: 0.7 },
-  technical_focus: { value: 0.7 },
-  emotional_retention: { value: 0.6 },
+  logical_density: { value: 0.5 },
+  technical_focus: { value: 0.5 },
+  emotional_retention: { value: 0.5 },
   politeness_level: { value: 0.5 },
   free_instruction: ""
 };

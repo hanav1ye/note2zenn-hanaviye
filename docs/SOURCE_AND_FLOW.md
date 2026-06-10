@@ -53,7 +53,7 @@ flowchart TB
 |------------|------|
 | `workspaceSettings.ts` | `readSettings` / `saveSettings` |
 | `secrets.ts` | SecretStorage の読み書き |
-| `conversionInput.ts` | URL・Secret・basename・converterConfig JSON の検証 |
+| `conversionInput.ts` | URL・Secret・basename の検証 |
 | `runConversion.ts` | `executeConversion` / `runConversionWithProgress` |
 | `output/outputChannel.ts` | Output チャンネル `Note2Zenn` |
 
@@ -92,7 +92,7 @@ flowchart TB
 ### `llmService.ts`
 
 - `prompts/system_prompt.txt` を system メッセージに使用
-- user メッセージ: `converter_config` JSON、各軸の few-shot、`article:` 以下に解析済み Markdown
+- user メッセージ: `converter_config` JSON と `article:` 以下の解析済み Markdown
 - モデル: `RuntimeConfig.openAiModel`（既定 `gpt-4.1-mini`）
 
 ### `assetService.ts`
@@ -119,9 +119,9 @@ flowchart TB
 ### `configService.ts`
 
 - `loadRuntimeConfig`: `zennRepoPath`, `openAiApiKey` 必須
-- `loadConverterConfig`: 欠損キーをデフォルト補完、`value` を 0〜1 に clamp。`rawConfig` がオブジェクトでない場合は全体デフォルト。**`example` は正規化時に落ちる**（各軸は `{ value }` のみ）
+- `loadConverterConfig`: 欠損キーをデフォルト補完、`value` を 0〜1 に clamp。`rawConfig` がオブジェクトでない場合は全体デフォルト。
 
-サイドバー側: `converterConfig` の JSON 構文チェックは Webview の「設定を保存」時のみ（`JSON.parse`）。変換は `readSettings()` の保存済み値を使用。
+サイドバー側: 4 軸スライダー + `free_instruction` の入力を `run` メッセージで受け取り、実行直前に `buildConverterConfigFromForm` 経由で保存してから変換する。
 
 ## 5. 型定義
 
@@ -133,7 +133,7 @@ flowchart TB
 ### `src/types/config.ts`
 
 - `ConverterConfig`: `logical_density`, `technical_focus`, `emotional_retention`, `politeness_level`, 任意 `free_instruction`, `options`
-- `ParameterSetting`: `value` (0.0〜1.0), 任意 `example[]`（Few-shot）
+- `ParameterSetting`: `value` (0.0〜1.0)
 - `RuntimeConfig`: API キー、モデル、Zenn パス、basename、Git 関連
 
 ## 6. ユーティリティ

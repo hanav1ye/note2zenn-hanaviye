@@ -2,12 +2,12 @@
  * OpenAI API による本文リライト（Inference ステップ）。
  *
  * prompts/system_prompt.txt を system メッセージに、
- * converterConfig と few-shot 例を user メッセージに載せて Chat Completions を呼ぶ。
+ * converterConfig を user メッセージに載せて Chat Completions を呼ぶ。
  * 応答は JSON（body + tags）を期待し、パース失敗時は本文全体とフォールバックタグを使う。
  */
 import fs from "node:fs/promises";
 import OpenAI from "openai";
-import { ConverterConfig, FewShotExample, ParameterSetting, RuntimeConfig } from "../types/config.js";
+import { ConverterConfig, RuntimeConfig } from "../types/config.js";
 import { splitZennTagWords } from "../utils/markdown.js";
 import { promptPath } from "../utils/paths.js";
 
@@ -30,7 +30,7 @@ const CONVERTER_CONFIG_PARAMETER_LEGEND_LINES: readonly string[] = [
 /** value / free_instruction の解釈ルール（JSON の隣に載せる） */
 const CONVERTER_VALUE_APPLICATION_LINES: readonly string[] = [
   "converter_config の value / free_instruction の扱い（リライトに反映すること）:",
-  "- few-shot を手本とする度合いは value に合わせる",
+  "- 各 value は対応する軸（論理性・技術寄り・感情保持・丁寧さ）の強度として連続的に解釈する",
   "- free_instruction に非空の文字列があるときは、他の軸と矛盾しない範囲で最優先に従う。"
 ];
 
@@ -150,43 +150,19 @@ class OpenAiClient implements LlmClient {
   }
 }
 
-/** converterConfig と few-shot を含む user プロンプトを組み立てる */
+/** converterConfig を含む user プロンプトを組み立てる */
 const buildUserPrompt = (
   markdown: string,
   converterConfig: ConverterConfig,
   slug: string,
   title: string
 ): string => {
-  const buildFewShotLines = (label: string, setting: ParameterSetting): string[] => {
-    const valueText: string = setting.value.toFixed(2);
-    const header: string = `- ${label}: この軸の value=${valueText} が、下の入出力ペアを「手本としてどれだけ参考にするか」の度合い。高いほど例の語感・言い換え方針に寄せ、低いほど例は弱いヒントに留め原文の表現を優先する。`;
-    const examples: FewShotExample[] | undefined = setting.example;
-    if (!examples || examples.length === 0) {
-      return [`- ${label}: (none)`];
-    }
-    const lines: string[] = [`- ${label}:`];
-    for (const [index, example] of examples.entries()) {
-      lines.push(`  - example_${index + 1}.input: ${example.input}`);
-      lines.push(`  - example_${index + 1}.output: ${example.output}`);
-    }
-    return lines;
-  };
-
-  const fewShotSection: string[] = [
-    "few_shot_examples（各ブロック先頭の value が、その軸の例の参考度。連続的に解釈）:",
-    ...buildFewShotLines("logical_density", converterConfig.logical_density),
-    ...buildFewShotLines("technical_focus", converterConfig.technical_focus),
-    ...buildFewShotLines("emotional_retention", converterConfig.emotional_retention),
-    ...buildFewShotLines("politeness_level", converterConfig.politeness_level)
-  ];
-
   return [
     `slug: ${slug}`,
     `title: ${title}`,
     ...CONVERTER_CONFIG_PARAMETER_LEGEND_LINES,
     ...CONVERTER_VALUE_APPLICATION_LINES,
     `converter_config: ${JSON.stringify(converterConfig, null, 2)}`,
-    ...fewShotSection,
     "task:",
     "- Rewrite the article based on system_prompt constraints and converter_config.",
     '- Output a single JSON object with "body" (rewritten Markdown) and "tags" (1-5 content-relevant Zenn tags; each tag must be a single word without hyphens, e.g. "typescript" not "machine-learning").',

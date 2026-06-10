@@ -68,6 +68,37 @@
       white-space: pre-wrap;
       min-height: 2em;
     }
+    .slider-block {
+      margin: 10px 0 12px;
+      padding: 8px;
+      border: 1px solid var(--vscode-input-border, transparent);
+      border-radius: 4px;
+      background: var(--vscode-input-background);
+    }
+    .slider-row {
+      margin-bottom: 10px;
+    }
+    .slider-row:last-child { margin-bottom: 0; }
+    .slider-label {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      margin-bottom: 4px;
+      font-size: 0.9em;
+    }
+    .slider-value {
+      font-variant-numeric: tabular-nums;
+      opacity: 0.85;
+    }
+    input[type="range"] {
+      width: 100%;
+      padding: 0;
+      height: 20px;
+      accent-color: var(--vscode-focusBorder, #007fd4);
+    }
+    #freeInstruction {
+      min-height: 64px;
+    }
   </style>
 </head>
 <body>
@@ -85,10 +116,39 @@
   <input id="openAiModel" type="text" />
   <label for="defaultBasename">既定 basename（任意）</label>
   <input id="defaultBasename" type="text" />
-  <label for="converterConfig">converterConfig（JSON）</label>
-  <textarea id="converterConfig"></textarea>
-  <button id="saveSettingsBtn" class="secondary">設定を保存</button>
-  <button id="openSettingsBtn" class="secondary">詳細設定を開く</button>
+  <p class="hint">文体は 0.0〜1.0 のスライダーで調整します（そのまま変換に反映）。</p>
+  <div class="slider-block">
+    <div class="slider-row">
+      <div class="slider-label">
+        <span>論理的・結論優先</span>
+        <span class="slider-value" id="logical_densityVal">0.50</span>
+      </div>
+      <input type="range" id="logical_density" min="0" max="100" step="1" value="50" data-axis="logical_density" />
+    </div>
+    <div class="slider-row">
+      <div class="slider-label">
+        <span>技術用語やコード解説</span>
+        <span class="slider-value" id="technical_focusVal">0.50</span>
+      </div>
+      <input type="range" id="technical_focus" min="0" max="100" step="1" value="50" data-axis="technical_focus" />
+    </div>
+    <div class="slider-row">
+      <div class="slider-label">
+        <span>感想・情緒</span>
+        <span class="slider-value" id="emotional_retentionVal">0.50</span>
+      </div>
+      <input type="range" id="emotional_retention" min="0" max="100" step="1" value="50" data-axis="emotional_retention" />
+    </div>
+    <div class="slider-row">
+      <div class="slider-label">
+        <span>丁寧さ（です・ます）</span>
+        <span class="slider-value" id="politeness_levelVal">0.50</span>
+      </div>
+      <input type="range" id="politeness_level" min="0" max="100" step="1" value="50" data-axis="politeness_level" />
+    </div>
+  </div>
+  <label for="freeInstruction">追加指示（free_instruction・任意）</label>
+  <textarea id="freeInstruction" placeholder="例: 見出しは短く、コード例は省略しない"></textarea>
 
   <h2>秘密情報</h2>
   <p class="hint">4 つすべて「設定済み」になるまで変換できません。</p>

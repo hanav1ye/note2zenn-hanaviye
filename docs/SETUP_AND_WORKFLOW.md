@@ -35,14 +35,14 @@ npm run package
 
 左の Activity Bar で **Note2Zenn** アイコンをクリックし、サイドバーを開きます。
 
-### 3.1 画面の設定項目（「設定を保存」で保存）
+### 3.1 画面の設定項目
 
 | 項目 | 意味 |
 |------|------|
 | Zenn リポジトリパス | Zenn 用 git リポジトリの**絶対パス**（例: `C:\git\my-zenn-repo`） |
 | OpenAI モデル | 使うモデル名（未入力時は `gpt-4.1-mini`） |
 | 既定 basename | 毎回 basename を空にしたときの既定値（任意） |
-| converterConfig | 文体の調整用 JSON（下記参照） |
+| converterConfig | 文体の調整（スライダー + 追加指示、下記参照） |
 
 ### 3.2 秘密情報（ボタンを押して入力）
 
@@ -54,46 +54,26 @@ npm run package
 
 値は **SecretStorage**（VSCode が管理する秘密領域）に保存されます。画面には「設定済み / 未設定」だけ表示されます。
 
-### 3.3 converterConfig（JSON）
+### 3.3 converterConfig（文体スライダー）
 
-サイドバーの JSON は **「設定を保存」** を押したときだけ `note2zenn.converterConfig` に書き込まれます。  
-**「変換を実行」ではテキストエリアの内容は読みません**（未保存の編集は反映されません）。
+サイドバーの 4 本のスライダー（0.0〜1.0）と **追加指示** は、`変換を実行` 時の値がそのまま使われます。
 
-#### 正しい形の例
+| UI | 設定キー | 意味 |
+|----|----------|------|
+| 論理密度 | `logical_density.value` | 論理的・結論優先の度合い |
+| 技術寄り | `technical_focus.value` | 技術用語やコード解説の度合い |
+| 感情・感想 | `emotional_retention.value` | 筆者の感想や情緒的表現の度合い |
+| 丁寧さ | `politeness_level.value` | 丁寧語（です・ます）の度合い |
+| 追加指示 | `free_instruction` | 任意。LLM への自由記述の指示 |
 
-```json
-{
-  "logical_density": { "value": 0.7 },
-  "technical_focus": { "value": 0.7 },
-  "emotional_retention": { "value": 0.6 },
-  "politeness_level": { "value": 0.5 },
-  "free_instruction": ""
-}
-```
+スライダーは 0〜100% で入力し、変換時に **0.0〜1.0 に丸め**られます（不正な数値は入りません）。
 
-| キー | 意味 |
+デフォルト: 4 軸とも `0.5`、`free_instruction` = 空。
+
+| 操作 | 結果 |
 |------|------|
-| `logical_density` など 4 軸 | 各 `{ "value": 0.0〜1.0 }` で文体の強さ |
-| `free_instruction` | 任意。追加の指示（文字列） |
-| `options` | 任意。将来用の真偽フラグ（オブジェクト） |
-
-各軸の `value` は変換時に **0.0〜1.0 に丸め**られます。
-
-#### サイドバーで壊したときの挙動
-
-| 操作・入力 | 結果 |
-|------------|------|
-| **設定を保存** + JSON 構文エラー（カンマ抜け、`{` 不足など） | **保存されない**。ログ欄に `converterConfig の JSON が不正です。` |
-| **設定を保存** + 空のテキストエリア | `{}` として保存 |
-| **設定を保存** + 構文は正しいが中身がズレている（型違い・軸の欠落など） | **そのまま保存される**（保存時は中身を検証しない） |
-| **変換を実行**（保存済みの設定を使用） | 変換開始時に `loadConverterConfig` で補正（欠けた軸はデフォルト、`value` は 0〜1 に clamp）。**エラーにはならず変換は続行** |
-| テキストエリアだけ編集して保存せずに変換 | **直前に保存した内容**で変換（画面の未保存 JSON は無視） |
-
-デフォルト値（補完時）: `logical_density` / `technical_focus` = 0.7、`emotional_retention` = 0.6、`politeness_level` = 0.5、`free_instruction` = `""`。
-
-#### 現バージョンの制限
-
-- JSON に `example`（Few-shot の入出力ペア）を書いても、変換時の正規化で **`value` のみが使われ、`example` は渡されません**（型定義上はあるが未対応）。
+| **変換を実行** | 現在のスライダー・追加指示を反映して実行 |
+| `converterConfig` に欠けた軸がある場合 | `loadConverterConfig` でデフォルト補完して実行続行 |
 
 VSCode の設定画面から編集する場合: コマンドパレット → `Note2Zenn: Open Settings`（挙動は上記と同じです）。
 
@@ -158,8 +138,8 @@ Git の処理（変更があるときだけ）:
 | basename がない | サイドバーまたは既定 basename を設定 |
 | note が 404 | URL が実在する公開記事か確認 |
 | Git 権限エラー | リポのパス・書き込み権限・`safe.directory` |
-| converterConfig が保存できない | JSON の構文（カンマ・括弧・引用符）を確認。[§3.3](#33-converterconfigjson) 参照 |
-| 変換結果のトーンが想定と違う | converterConfig を保存したか確認。未保存の編集は反映されない |
+| 文体設定が反映されない | 変換直前のスライダー・追加指示を再確認。[§3.3](#33-converterconfig文体スライダー) 参照 |
+| 変換結果のトーンが想定と違う | 各スライダー値と `free_instruction` の文面を見直す |
 
 ## 8. 安全のためのおすすめ
 

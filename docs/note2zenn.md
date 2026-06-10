@@ -37,7 +37,7 @@ note で公開した記事を、Zenn に投稿しやすい形式（Markdown + �
 | UI 完結 | サイドバー Webview で設定・秘密情報・変換を行う（`.env` 不要） |
 | OpenAI 固定 | 推論は OpenAI Chat Completions のみ |
 | アセット移行 | 画像をローカル保存し、本文参照を `/images/{assetDir}/` に統一 |
-| 文体制御 | `converterConfig` の数値軸 + 任意 Few-shot |
+| 文体制御 | `converterConfig` の数値軸 + 追加指示（`free_instruction`） |
 | 一気通貫 | 変換から Zenn リポへのコピー・Git 公開までパイプライン化 |
 
 ## 3. アーキテクチャ
@@ -102,15 +102,14 @@ note で公開した記事を、Zenn に投稿しやすい形式（Markdown + �
 
 | タイミング | 挙動 |
 |------------|------|
-| サイドバー「設定を保存」 | `JSON.parse` のみ。構文エラーなら保存しない |
-| 変換実行 | 保存済み設定を `loadConverterConfig` で正規化（欠損・型違いはデフォルト補完、`value` を 0〜1 に clamp）。構文チェックはしない |
-| 未保存のテキストエリア | 変換では参照しない |
+| サイドバーで値を変更 | 4 軸スライダー + `free_instruction` を編集 |
+| 変換実行 | 実行直前に現在値を `buildConverterConfigFromForm` で保存し、`loadConverterConfig` で正規化して使用 |
+| 不正値が入る場合 | `loadConverterConfig` が欠損・型違いをデフォルト補完し、`value` を 0〜1 に clamp |
 
-- 保存時点では **スキーマ検証なし**（意味的におかしい JSON も保存可）
 - 変換時は **エラーにせず補正して続行**
-- `example`（Few-shot）は現状、正規化時に落ちる（`value` のみ LLM に渡る）
+- `example`（Few-shot）は廃止（`converterConfig` は `value` 系 4 軸 + `free_instruction` を使用）
 
-利用者向けの詳細は [SETUP_AND_WORKFLOW.md §3.3](SETUP_AND_WORKFLOW.md#33-converterconfigjson)。
+利用者向けの詳細は [SETUP_AND_WORKFLOW.md §3.3](SETUP_AND_WORKFLOW.md#33-converterconfig文体スライダー)。
 
 ### 4.4 推論（Inference）
 
@@ -153,17 +152,11 @@ note で公開した記事を、Zenn に投稿しやすい形式（Markdown + �
 
 ## 6. データモデル（主要型）
 
-### ParameterSetting / FewShotExample
+### ParameterSetting
 
 ```typescript
-export interface FewShotExample {
-  input: string;
-  output: string;
-}
-
 export interface ParameterSetting {
   value: number; // 0.0 〜 1.0
-  example?: FewShotExample[];
 }
 ```
 

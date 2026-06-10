@@ -17,31 +17,35 @@ import {
 } from "./settings/secrets.js";
 import { readSettings, saveSettings, type Note2ZennSettings } from "./settings/workspaceSettings.js";
 import {
-  areAllSecretsConfigured,
-  getSecretsValidationError,
-  parseConverterConfigJson
-} from "./validation/conversionInput.js";
+  buildConverterConfigFromForm,
+  readConverterFormValues,
+  type ConverterFormValues
+} from "./settings/converterConfigForm.js";
+import { areAllSecretsConfigured, getSecretsValidationError } from "./validation/conversionInput.js";
 import { loadSidebarHtml } from "./webview/loadSidebarHtml.js";
 
 /** Webview → 拡張ホストへ送るメッセージ種別 */
 type WebviewInboundMessage =
   | { type: "ready" }
-  | { type: "run"; noteUrl: string; basename: string }
   | {
-      type: "saveSettings";
-      zennRepoPath: string;
-      openAiModel: string;
-      defaultAnalysisBasename: string;
-      converterConfigText: string;
+      type: "run";
+      noteUrl: string;
+      basename: string;
+      settingsDraft: {
+        zennRepoPath: string;
+        openAiModel: string;
+        defaultAnalysisBasename: string;
+        converter: ConverterFormValues;
+      };
     }
-  | { type: "setSecret"; secret: "openAiApiKey" | "githubToken" | "gitAuthorName" | "gitAuthorEmail" }
-  | { type: "openSettings" };
+  | { type: "setSecret"; secret: "openAiApiKey" | "githubToken" | "gitAuthorName" | "gitAuthorEmail" };
 
 /** 拡張ホスト → Webview へ送るメッセージ種別 */
 type WebviewOutboundMessage =
   | {
       type: "state";
       settings: Note2ZennSettings;
+      converterForm: ConverterFormValues;
       secrets: SecretStatus;
       canRun: boolean;
       secretsError: string;
@@ -102,9 +106,11 @@ export class Note2ZennSidebarProvider implements vscode.WebviewViewProvider {
     }
     const secrets = await readSecretStatus(this.context);
     const secretsError = getSecretsValidationError(secrets) ?? "";
+    const settings = readSettings();
     const payload: WebviewOutboundMessage = {
       type: "state",
-      settings: readSettings(),
+      settings,
+      converterForm: readConverterFormValues(settings.converterConfig),
       secrets,
       canRun: areAllSecretsConfigured(secrets),
       secretsError
@@ -125,22 +131,6 @@ export class Note2ZennSidebarProvider implements vscode.WebviewViewProvider {
       case "ready":
         await this.postState();
         return;
-      case "saveSettings": {
-        const parsed = parseConverterConfigJson(message.converterConfigText);
-        if (!parsed.ok) {
-          this.postLog(parsed.error);
-          return;
-        }
-        await saveSettings({
-          zennRepoPath: message.zennRepoPath,
-          openAiModel: message.openAiModel,
-          defaultAnalysisBasename: message.defaultAnalysisBasename,
-          converterConfig: parsed.value
-        });
-        vscode.window.showInformationMessage("Settings saved.");
-        await this.postState();
-        return;
-      }
       case "setSecret": {
         const saved = await this.storeSecretByKind(message.secret);
         if (saved) {
@@ -148,15 +138,15 @@ export class Note2ZennSidebarProvider implements vscode.WebviewViewProvider {
         }
         return;
       }
-      case "openSettings":
-        await vscode.commands.executeCommand(
-          "workbench.action.openSettings",
-          "@ext:hanaviye.note2zenn-hanaviye"
-        );
-        return;
       case "run": {
         this.postLog("変換を開始します…");
         try {
+          await saveSettings({
+            zennRepoPath: message.settingsDraft.zennRepoPath,
+            openAiModel: message.settingsDraft.openAiModel,
+            defaultAnalysisBasename: message.settingsDraft.defaultAnalysisBasename,
+            converterConfig: buildConverterConfigFromForm(message.settingsDraft.converter)
+          });
           await runConversionWithProgress(this.context, {
             noteUrl: message.noteUrl,
             basename: message.basename

@@ -134,20 +134,21 @@
           "type": "object",
           "default": {
             "logical_density": {
-              "value": 0.7
+              "value": 0.5
             },
             "technical_focus": {
-              "value": 0.7
+              "value": 0.5
             },
             "emotional_retention": {
-              "value": 0.6
+              "value": 0.5
             },
             "politeness_level": {
               "value": 0.5
             },
             "free_instruction": ""
           },
-          "description": "Converter parameters (logical_density, technical_focus, etc.)."
+          "description": "Rewrite tone: four 0.0–1.0 axes (logical_density, technical_focus, emotional_retention, politeness_level) and optional free_instruction. Edited via the Note2Zenn sidebar on each run.",
+          "markdownDescription": "Controls how OpenAI rewrites the article.\n\n- **logical_density** (`value` 0.0–1.0): logical, conclusion-first tone\n- **technical_focus**: technical terms and code explanation\n- **emotional_retention**: author opinion and emotional phrasing\n- **politeness_level**: polite (です・ます) style\n- **free_instruction** (string, optional): extra instructions for the model\n\nEach axis is `{ \"value\": number }`. Few-shot `example` pairs are not supported.\n\nPrefer the **Note2Zenn** sidebar sliders; values are saved when you run a conversion."
         }
       }
     }

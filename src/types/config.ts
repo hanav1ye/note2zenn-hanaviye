@@ -6,23 +6,11 @@
  */
 
 /**
- * 変換パラメータの値とFew-shot例を保持する設定単位。
- */
-export interface FewShotExample {
-  /** 変換前テキスト */
-  input: string;
-  /** 変換後テキスト */
-  output: string;
-}
-
-/**
- * 変換パラメータの値とFew-shot例を保持する設定単位。
+ * 変換パラメータの値を保持する設定単位。
  */
 export interface ParameterSetting {
   /** パラメータの強度 (0.0 〜 1.0) */
   value: number;
-  /** ユーザー定義のFew-shot（入力→出力ペア、任意） */
-  example?: FewShotExample[];
 }
 
 /**
