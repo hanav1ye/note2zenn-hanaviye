@@ -83,7 +83,7 @@ flowchart TB
 - `cheerio` で HTML を解析
 - タイトル正規化、著者名の除去
 - 見出し画像（アイキャッチ）・末尾プロフィール画像の除外
-- 本文を Markdown 化（`<br>` → ハード改行 `  \n`）
+- 本文を Markdown 化（`<br>` → ハード改行 `  \n`、`<hr>` → 水平線 `---`）
 - 画像 URL を `/images/<assetDir>/filename` 形式に変換
 - `figcaption` → alt テキスト
 - タグは Inference で OpenAI が生成（本ステップでは作らない）

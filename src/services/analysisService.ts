@@ -22,6 +22,9 @@ const escapeMarkdown = (value: string): string => value.replace(/\|/g, "\\|");
  */
 const MARKDOWN_HARD_LINE_BREAK = "  \n" as const;
 
+/** note の `<hr>` 区切り線 → Zenn / CommonMark の水平線 */
+const MARKDOWN_HORIZONTAL_RULE = "\n\n---\n\n" as const;
+
 /**
  * 画像URLを絶対URLへ正規化する。
  * @param src 元のsrc属性値
@@ -248,6 +251,16 @@ const buildMarkdownLinkReplacement = ($: CheerioAPI, $a: ReturnType<CheerioAPI>,
  * ネストした見出しを壊さないよう、`h6` から `h1` の順で置換する。
  * @param $ `__article-root` を含むフラグメントに束縛された Cheerio API
  */
+/**
+ * note 記事 DOM の `<hr>` を Markdown 水平線（`---`）へ変換する。
+ * `.text()` では hr の内容が空のため、そのままだと区切り線が失われる。
+ */
+const convertNoteHorizontalRulesToMarkdown = ($: CheerioAPI): void => {
+  $("#__article-root hr").each((_, el) => {
+    $(el).replaceWith(MARKDOWN_HORIZONTAL_RULE);
+  });
+};
+
 const convertNoteHeadingsToAtxMarkdown = ($: CheerioAPI): void => {
   const $root = $("#__article-root");
   for (let level = 6; level >= 1; level--) {
@@ -271,6 +284,7 @@ const convertNoteHeadingsToAtxMarkdown = ($: CheerioAPI): void => {
  * リンクは `p` 内ならインライン、`p` 外なら `@[card](url)`（上下空行付き）。
  * `<br>` は CommonMark ハード改行（行末スペース2つ + LF）へ置換する。
  * 見出しは `convertNoteHeadingsToAtxMarkdown` で ATX 行へ確定する。
+ * 区切り線（`<hr>`）は `convertNoteHorizontalRulesToMarkdown` で `---` へ変換する。
  * `.text()` はブロック境界の改行を含まないため、主要ブロック末尾に改行を付与してから抽出する（`p` は段落区切り用に `\n\n`、それ以外は `\n`）。
  * @param fragmentHtml article 要素の innerHTML 相当
  * @param baseUrl note記事URL（相対リンク解決用）
@@ -337,11 +351,14 @@ const articleHtmlToMarkdownish = (fragmentHtml: string, baseUrl: string): string
   const $root = $("#__article-root");
   convertNoteHeadingsToAtxMarkdown($);
 
-  // 4. `.text()` 前にブロック境界の改行を付与（段落・リスト等の区切りを保持）
+  // 4. 区切り線を Markdown 水平線へ変換
+  convertNoteHorizontalRulesToMarkdown($);
+
+  // 5. `.text()` 前にブロック境界の改行を付与（段落・リスト等の区切りを保持）
   for (const el of $root.find("p").toArray()) {
     $(el).append("\n\n");
   }
-  for (const el of $root.find("blockquote, li, hr, tr").toArray()) {
+  for (const el of $root.find("blockquote, li, tr").toArray()) {
     $(el).append("\n");
   }
   for (const el of $root.children("div").toArray()) {
