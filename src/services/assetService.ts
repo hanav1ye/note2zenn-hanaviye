@@ -15,6 +15,7 @@ export const downloadImages = async (
   imagesBaseDir: string = publicImagesDir,
   imageSubDir: string = article.assetDir
 ): Promise<void> => {
+  // 画像0枚の記事では一時ディレクトリ自体を作らない（受け側の copyService でガードする）
   if (article.images.length === 0) {
     return;
   }

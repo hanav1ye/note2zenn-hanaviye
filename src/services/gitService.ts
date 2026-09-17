@@ -5,6 +5,8 @@
  * 差分がなければスキップ。GitHub Token がある場合は HTTPS push に埋め込む。
  */
 import { execFile } from "node:child_process";
+import fs from "node:fs/promises";
+import path from "node:path";
 import { promisify } from "node:util";
 import { ParsedArticle } from "../types/article.js";
 
@@ -56,6 +58,21 @@ const runGitWithStdout = async (repoPath: string, args: string[]): Promise<strin
 };
 
 /** x-access-token 形式で HTTPS リモート URL にトークンを埋め込む */
+/** 存在しないパスを git add に渡すと pathspec エラーになるため事前に絞り込む */
+const filterExistingPaths = async (repoPath: string, relativePaths: string[]): Promise<string[]> => {
+  const results = await Promise.all(
+    relativePaths.map(async (relativePath) => {
+      try {
+        await fs.access(path.join(repoPath, relativePath));
+        return relativePath;
+      } catch {
+        return null;
+      }
+    })
+  );
+  return results.filter((value): value is string => value !== null);
+};
+
 const buildAuthenticatedRemoteUrl = (remoteUrl: string, githubToken: string): string => {
   const url = new URL(remoteUrl);
   url.username = "x-access-token";
@@ -80,7 +97,13 @@ export const publishToZennRepo = async (
   const commitUserEmail = gitOptions?.gitAuthorEmail ?? "note2zenn-bot@example.local";
   const githubToken = gitOptions?.githubToken;
 
-  await runGit(zennRepoPath, ["add", "--", articlePath, imagePath]);
+  // 画像0枚の記事では images/<assetDir> が存在しないため、実在するパスだけを stage する
+  const stagePaths = await filterExistingPaths(zennRepoPath, [articlePath, imagePath]);
+  if (stagePaths.length === 0) {
+    console.log(`[INFO] Nothing to stage for ${article.slug}.`);
+    return;
+  }
+  await runGit(zennRepoPath, ["add", "--", ...stagePaths]);
 
   // staged 差分がなければ commit / push しない
   try {
